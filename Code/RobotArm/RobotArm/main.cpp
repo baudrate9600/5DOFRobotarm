@@ -9,6 +9,7 @@
 #include <avr/interrupt.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include "Usart.h"
 #include "timer.h"
 
@@ -20,15 +21,14 @@
 
 #define SERVO_0_PWM OCR2B
 
+#define SERVO_REGISTER PORTD 
 #define M0_STEP (1 << PORTC0)  
 #define M0_DIR	(1 << PORTC1)
 
 #define BUFFER_SEND_SIZE = 16  
+#define BUFFER_SIZE 32
 
 
-ISR(USART_RX_vect){
-	UDR0;
-}
 
 /* Offloads all the characters stored in character register and sends
  * them via the uart */
@@ -62,14 +62,92 @@ char buffer_read(){
 	return c;
 }
 
+/*Servo Control */ 
+void servo_rotate(int enable,int error,volatile uint8_t * pwm, uint8_t dir_a,uint8_t dir_b){
+	switch(enable){
+		case 1 :
+			if (error > 0){
+				SERVO_REGISTER |= dir_a  ;
+				SERVO_REGISTER &= ~dir_b;
+			}else if (error < 0){
+				SERVO_REGISTER &= ~dir_a;
+				SERVO_REGISTER |= dir_b;
+			}
+			*pwm = error;
+			break; 
+		case 0 : 
+			* pwm = 0; 
+			
+	}	
+}
+
 ISR(USART_TX_vect){
 	//if(usart_fifo_counter > 0){
 	//	UDR0 = usart_	
 	//}	
 }
+volatile char received_characters[BUFFER_SIZE]; 
+volatile uint8_t received_index = 0; 
+volatile bool received_byte= false;
+enum parse_fsm {WAIT,MOTOR,SIGN,ANGLE, STOP};	
+enum parse_fsm parse_state = WAIT;
+
+struct Motor_status{
+	uint8_t motor_select; 
+	int16_t angle;
+	uint8_t done; 
+	};
+Motor_status motor_status; 
+ISR(USART_RX_vect){
+	motor_status.done = 0; 
+	char c = UDR0;
+	static int counter = 0; 
+	static int sign;
+	static int angle; 
+	/*finit state machine for recieving data frame */
+	switch(parse_state){
+				case WAIT: 
+					if(c == 'M'){
+						parse_state =MOTOR;
+						angle = 1; 
+					}
+					break;
+				case MOTOR: 
+					motor_status.motor_select = c-48; 
+					parse_state = SIGN;
+					break; 
+				case SIGN:
+					parse_state = ANGLE;
+					if(c == '-'){
+						sign = -1; 	
+					}else if(c == '+'){
+						sign = 1; 		
+					}else{
+						parse_state = WAIT;
+					}
+					counter = 3;
+					break; 
+				case ANGLE: 
+					/*5328 is the conversion from ascii to int: 48*100+48*10+48=5328*/
+					/*Todo instead of sending the numbers in ascii send it in raw binary*/
+					counter--;
+					angle += (c-48)*pow(10,counter);  
+					if(counter == 0){
+						motor_status.angle = angle * sign;
+						parse_state = WAIT; 
+						motor_status.done = 1; 
+					}
+					break; 
+		}	
+		
+
+}
+
 
 int main(void)
 {
+
+	
 	/* initialize component */ 
 	sei();
 	timer_enable();	
@@ -90,49 +168,33 @@ int main(void)
 	TCCR2B |= (1 << CS20); /*No prescaling */
 	/* PID */
 	int error = 0;	
-	int target_position = 0; 
+	
 	int P     = 1;
 	int I   = 5; 
 	uint16_t integral_time_base = 0; 
 	float integral = 0;
 	
 	
-	int target_vector[] = {0, 20, -40, 20, -50};
-	int index = 0; 
 	
     while (1) 
     {
-		
-		
-	//	usart_sendln((int)timer_ms()); 
-		integral_time_base = timer_ms();
-		error = target_vector[index] - tacho;
-		SERVO_0_PWM = P * error ; 				
-		if(error > 0){
-			PORTD |= SERVO_0_DIR_A;
-			PORTD &= ~SERVO_0_DIR_B;
-		}else if (error < 0){
-			PORTD &= ~SERVO_0_DIR_A;
-			PORTD |= SERVO_0_DIR_B;
+		/*character FSM */ 
+		char buff[50]; 
+		if(motor_status.done == 1){
+			sprintf(buff,"Motor %d, angle =  %d\n",motor_status.motor_select,motor_status.angle);
+			usart_send(buff);
+			motor_status.done = 0; 
+		}
+				
+		error = P *(motor_status.angle*10 - tacho);
+		if(error > 255){
+			error = 255; 
+		}
+		if (error != 0){
+			servo_rotate(1,error,&SERVO_0_PWM,SERVO_0_DIR_A,SERVO_0_DIR_B);
 		}else{
+			SERVO_0_PWM = 0; 
 		}
-		/*1 millisecond has passed */
-		if(integral_time_base){
-			integral += 0.001 * error; 
-			integral_time_base = 0; 
-		}
-
-	    if(timer_ms() > 2000){
-			timer_reset();
-			index++; 
-			if(index == 4){
-				index = 0;
-			}
-		}
-
-
-		
-
 
 		tacho_values= PIND;
 		if (tacho_state == 0){

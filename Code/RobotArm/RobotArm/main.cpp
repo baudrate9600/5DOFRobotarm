@@ -26,6 +26,8 @@
 #define STEPPER_REGISTER PORTB
 #define M0_STEP (1 << PORTB0)  
 #define M0_DIR	(1 << PORTB1)
+#define M1_STEP (1 << PORTB2) 
+#define M1_DIR  (1 << PORTB3)
 
 #define BUFFER_SEND_SIZE = 16  
 #define BUFFER_SIZE 32
@@ -74,7 +76,7 @@ ISR(USART_TX_vect){
 volatile char received_characters[BUFFER_SIZE]; 
 volatile uint8_t received_index = 0; 
 volatile bool received_byte= false;
-enum parse_fsm {WAIT,MOTOR,SIGN,ANGLE, STOP};	
+enum parse_fsm {WAIT,MOTOR,SIGN,ANGLE };	
 enum parse_fsm parse_state = WAIT;
 
 struct Motor_status{
@@ -198,16 +200,11 @@ void stepper_rotate(Stepper_motor *motor,uint8_t dir, uint8_t step){
 			}
 			STEPPER_REGISTER &= ~step; 
 			motor->diff = abs(motor->diff); 
-			usart_sendln(motor->diff);
-			usart_sendln(motor->pos);
 			motor->f_pos = motor->pos;
 			break; 
 		case 2: 
 			if(STEPPER_REGISTER & step){
-				
 				motor->diff--;	
-				motor->f_pos=motor->f_pos + motor->gear_train*motor->dir;
-				motor->pos = (float)motor->f_pos;
 				if(motor->diff == 0){
 					motor->state = 0; 
 					motor->start = 0;
@@ -254,10 +251,14 @@ int main(void)
 	uint32_t pid_timer = 0; 
 	uint32_t stepper_timer = 0;
 	
-	DDRB |= M0_DIR | M0_STEP;
+	DDRB |= M0_DIR | M0_STEP | M1_STEP | M1_DIR;
 	Stepper_motor stepper0 = {0};
 	stepper0.gear_train = 0.04 ;
 	stepper0.pos = 0; 
+
+	Stepper_motor stepper1 ={0};
+	stepper1.gear_train = 0.14;
+	stepper1.pos = 0;
     while (1) 
     {
 		/*character FSM */ 
@@ -274,6 +275,9 @@ int main(void)
 					stepper0.target_pos = motor_status.angle; 
 					stepper0.start = 1; 
 					break; 
+				case 2 : 
+					stepper1.target_pos = motor_status.angle; 
+					stepper1.start = 1; 
 			}
 		}
 
@@ -291,6 +295,7 @@ int main(void)
 			pid_timer = timer_ms();
 			output = servo_pid(&servo0);
 			stepper_rotate(&stepper0,M0_DIR,M0_STEP);
+			stepper_rotate(&stepper1,M1_DIR, M1_STEP);
 		}	
 		if(output > 255){
 			output = 255; 

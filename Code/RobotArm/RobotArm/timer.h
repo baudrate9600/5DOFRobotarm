@@ -15,7 +15,7 @@
 void timer_enable();
 void timer_disable();
 void timer_reset();
-uint32_t timer_ms() ;
+uint32_t timer_10k() ;
 
 
 

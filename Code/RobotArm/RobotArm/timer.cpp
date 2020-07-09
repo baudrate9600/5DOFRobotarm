@@ -19,8 +19,8 @@ void timer_enable(){
 	TCCR1B = 0;
 	TCNT1 = 0;
 
-	// 1000 Hz (16000000/((249+1)*64))
-	OCR1A = 249;
+	// 10000 Hz (16000000/((24+1)*64))
+	OCR1A = 24;
 	// CTC
 	TCCR1B |= (1 << WGM12);
 	// Prescaler 64
@@ -41,7 +41,7 @@ void timer_reset(){
 }
 
 //Return the elapsed time since the counter was enable 
-uint32_t timer_ms(){
+uint32_t timer_10k(){
 	return timer_counter;
 }
 

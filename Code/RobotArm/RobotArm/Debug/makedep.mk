@@ -4,6 +4,8 @@
 
 main.cpp
 
+StepperMotor.cpp
+
 timer.cpp
 
 Usart.cpp

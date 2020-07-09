@@ -12,6 +12,7 @@
 #include <math.h>
 #include "Usart.h"
 #include "timer.h"
+#include "StepperMotor.h"
 
 #define TACHO_0_P (1 << PORTD2)
 #define TACHO_0_M (1 << PORTD5)
@@ -23,7 +24,6 @@
 
 #define SERVO_REGISTER PORTD 
 
-#define STEPPER_REGISTER PORTB
 #define M0_STEP (1 << PORTB0)  
 #define M0_DIR	(1 << PORTB1)
 #define M1_STEP (1 << PORTB2) 
@@ -76,8 +76,8 @@ ISR(USART_TX_vect){
 volatile char received_characters[BUFFER_SIZE]; 
 volatile uint8_t received_index = 0; 
 volatile bool received_byte= false;
-enum parse_fsm {WAIT,MOTOR,SIGN,ANGLE };	
-enum parse_fsm parse_state = WAIT;
+typedef enum  {WAIT,MOTOR,SIGN,ANGLE }parse_fsm;	
+parse_fsm parse_state = WAIT;
 
 struct Motor_status{
 	uint8_t motor_select; 
@@ -143,16 +143,6 @@ struct Servo_motor{
 	float I; 
 	int D; 
 	};
-struct Stepper_motor{
-	uint8_t start;
-	int16_t pos; 
-	int16_t target_pos;
-	int16_t diff;
-	uint8_t dir;
-	float f_pos;
-	int state; 
-	float gear_train;
-	};
 float servo_pid(Servo_motor * motor){
 		float error = (motor->target_pos- 0.2f*motor->current_pos);
 
@@ -181,41 +171,8 @@ void servo_rotate(float val,volatile uint8_t * pwm, uint8_t dir_a,uint8_t dir_b)
 	}
 	*pwm = speed;
 }
-void stepper_rotate(Stepper_motor *motor,uint8_t dir, uint8_t step){
-	switch (motor->state){
-		case 0:
-			if(motor->start == 1){
-				motor->state = 1; 
-			}	
-			break;
-		case 1:
-			motor->diff = (motor->target_pos - motor->pos)/motor->gear_train;
-			motor->state = 2; 
-			if(motor->diff > 0){
-				STEPPER_REGISTER |= dir;
-				motor->dir = 1;
-			}else if(motor->diff < 0){
-				STEPPER_REGISTER &= ~dir; 
-				motor->dir = -1; 
-			}
-			STEPPER_REGISTER &= ~step; 
-			motor->diff = abs(motor->diff); 
-			motor->f_pos = motor->pos;
-			break; 
-		case 2: 
-			if(STEPPER_REGISTER & step){
-				motor->diff--;	
-				if(motor->diff == 0){
-					motor->state = 0; 
-					motor->start = 0;
-					motor->pos=motor->target_pos;
-				}
-			}
-			STEPPER_REGISTER ^= step;
-			break; 
-	}
-}
 
+/*some comment*/
 int main(void)
 {
 
@@ -249,16 +206,9 @@ int main(void)
 	
 	uint32_t curtime = 0; 	
 	uint32_t pid_timer = 0; 
-	uint32_t stepper_timer = 0;
 	
 	DDRB |= M0_DIR | M0_STEP | M1_STEP | M1_DIR;
-	Stepper_motor stepper0 = {0};
-	stepper0.gear_train = 0.04 ;
-	stepper0.pos = 0; 
-
-	Stepper_motor stepper1 ={0};
-	stepper1.gear_train = 0.14;
-	stepper1.pos = 0;
+	StepperMotor stepper0(0,0.05,M0_DIR,M0_STEP);
     while (1) 
     {
 		/*character FSM */ 
@@ -276,27 +226,10 @@ int main(void)
 					stepper0.start = 1; 
 					break; 
 				case 2 : 
-					stepper1.target_pos = motor_status.angle; 
-					stepper1.start = 1; 
+					break;
 			}
 		}
 
-		if(timer_ms()-curtime > 500){
-			curtime = timer_ms(); 
-			//sprintf(buff,"Current pos %d, Target pos =  %d, P = %d, I = %d\n",servo0.current_pos,servo0.target_pos,servo0.proportional,servo0.integral);
-			//usart_send(buff);
-			//usart_sendln(servo_0.current_pos);
-
-			usart_sendln(stepper0.pos);
-
-		}
-		//servo0.target_pos=stepper0.pos;		
-		if(timer_ms() - pid_timer > 1){
-			pid_timer = timer_ms();
-			output = servo_pid(&servo0);
-			stepper_rotate(&stepper0,M0_DIR,M0_STEP);
-			stepper_rotate(&stepper1,M1_DIR, M1_STEP);
-		}	
 		if(output > 255){
 			output = 255; 
 		}else if(output < -255){
@@ -304,8 +237,8 @@ int main(void)
 		}
 		//usart_sendln(temp);	
 		servo_rotate(output,&SERVO_0_PWM,SERVO_0_DIR_A,SERVO_0_DIR_B);
-		
-
+	
+		stepper0.rotate(timer_10k());
 		tacho_values= PIND;
 		if (tacho_state == 0){
 			if (PIND & TACHO_0_P){

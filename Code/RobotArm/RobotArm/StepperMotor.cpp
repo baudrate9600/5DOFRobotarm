@@ -73,37 +73,26 @@ stepper_fsm StepperMotor::rotate(uint32_t current_time)
 			vmax= 0.5*(acceleration*time-sqrt(pow(acceleration*time,2)-(angle*acceleration*4)));
 			t1=(pow(vmax,2)*num_steps)/(2*angle*acceleration);
 			t0 =num_steps-t1;
-			velocity = 1/(float)(vmax*step_to_angle)*10000 ; 
-			coef = velocity/t1;
-			base_velocity = velocity*coef;
+			step_time =1000* sqrt((2*step_to_angle)/acceleration);
 			/*End Computation */
-			usart_sendln("##########");
-			usart_sendln(angle);
-			usart_sendln(num_steps);
-			usart_sendln(t0);
-			usart_sendln(t1);
-			usart_sendln(coef);
-			usart_sendln(velocity);
-			usart_sendln((int)base_velocity);
-			velocity_counter = 0;
+			counter = 0; 
 	    	break; 
 		case S_TURN:
 		//	usart_sendln("test");
 			state = S_TURN;
-			if ((current_time - stepper_time) > (base_velocity-coef*velocity_counter)){
+			if ((current_time - stepper_time) > step_time){
 				STEPPER_REGISTER |= step_pin;
 				stepper_time = current_time; 
-					num_steps--; 
+					counter++; 
 		//			usart_sendln(num_steps);
-					if(num_steps == 0){
+					if(counter == num_steps){
 						current_pos = target_pos; 
 						state = S_WAIT;
 						start = 0; 
 						}
-					if(num_steps > t0){
-						velocity_counter++;
+					if(counter < t1){
+						step_time=step_time-(2*step_time)/(4*counter +1);	
 					}else if(num_steps < t1){
-						velocity_counter--;
 					}	
 					
 				STEPPER_REGISTER &= ~step_pin;

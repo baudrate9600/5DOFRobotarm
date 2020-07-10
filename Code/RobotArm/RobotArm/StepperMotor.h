@@ -31,9 +31,8 @@ public:
 	uint16_t acceleration; 
 	uint16_t time; 
 	int16_t angle;
-	uint8_t coef;
-	uint16_t base_velocity;
-	uint16_t velocity_counter; 
+	uint32_t step_time; 
+	uint16_t counter;
 	char bufx[30];
 	
 protected:

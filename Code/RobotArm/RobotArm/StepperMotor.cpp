@@ -61,7 +61,7 @@ int StepperMotor::rotate(uint32_t current_time){
 			vmax= 0.5*(acceleration*time-sqrt(pow(acceleration*time,2)-(angle*acceleration*4)));
 			t0=(pow(vmax,2)*num_steps)/(2*angle*acceleration);
 			t1 =num_steps-t0;
-			step_time =1000* sqrt((2*step_to_angle)/acceleration);
+			step_time =10000* sqrt(2/(acceleration*step_to_angle));
 			//sprintf(buff,"vmax=%d,#n=%d,t0=%d,t1=%d,st=%d",vmax,num	
 			counter  = 0;
 			velocity_counter = 1; 

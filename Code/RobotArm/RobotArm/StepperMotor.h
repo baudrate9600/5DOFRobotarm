@@ -13,31 +13,52 @@
 #define STEPPER_REGISTER PORTB
 
 /* Finite state machine of the stepper motor
- * WAIT   : wait until start is true 
- * Compute: Compute the amount of steps for the stepper motor 
- * Turn   : each time it is called it makes 1 step until it has completely turned 
+ * S_ACCEL   : accelerate until t_0 
+ * S_CONSTANT: rotate at fixed speed [t0, t1]
+ * S_DECEL   : decelerate until stop
  */
- 	typedef enum  {S_WAIT,S_COMPUTE,S_ACCEL,S_CONSTANT,S_DECEL,S_TURN}stepper_fsm;
+ /*
+   v
+	|       ________________________________   - - - - - vmax 
+	|      /|							   |\
+	|     /	|							   | \
+	|    /	|							   |  \
+	|   /	|							   |   \ --------- slop=a
+	|  /	|							   |	\
+	| /		|							   |	 \
+	0       t0                             t1     stop 	
+	 ------------------------------------------------ t
+*/
+
+ 	typedef enum  {S_WAIT,
+				   S_COMPUTE,
+				   S_ACCEL,
+				   S_CONSTANT,
+				   S_DECEL,S_TURN}
+				   stepper_fsm;
 class StepperMotor
 {
 //variables
 public:
+	/* Start the rotation of the stepper motor */ 	
+	uint8_t start; 
+	
 	/* Keeps track of where the stepper is and where it should go to*/
 	int16_t current_pos; 
 	int16_t target_pos; 
+	
+	/* Total number of steps , and the treshholds values */
 	uint16_t num_steps,t0,t1;
-	uint8_t start; 
-	uint16_t vmax;
+	
+	/* Rate at which the stepper motor accelerates */
 	uint16_t acceleration; 
-	uint16_t time; 
-	int16_t angle;
-	int32_t f_step_time; 
-	float step_time;
-	uint16_t counter;
-	int16_t velocity_counter;
-	int16_t tmax;
-	char enable_stepper;
-	char bufx[30];
+	/*Duration of the rotation*/
+	uint16_t duration; 
+
+	int16_t pulse_width;
+
+	int16_t pulse_width_counter ;
+	uint16_t step_counter;
 	
 protected:
 private:

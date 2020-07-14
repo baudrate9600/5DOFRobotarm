@@ -76,13 +76,17 @@ ISR(USART_TX_vect){
 volatile char received_characters[BUFFER_SIZE]; 
 volatile uint8_t received_index = 0; 
 volatile bool received_byte= false;
-typedef enum  {WAIT,MOTOR,SIGN,ANGLE }parse_fsm;	
-parse_fsm parse_state = WAIT;
+typedef enum  {P_WAIT,
+			   P_MOTOR_SELECT,
+			   P_DATA,
+			   P_DONE }parse_fsm;	
+parse_fsm parse_state = P_WAIT;
 
+//int parse_data[16] = 0; 
 struct Motor_status{
 	uint8_t motor_select; 
-	int angle;
-	uint8_t done; 
+	int data[8];
+	int done;
 	};
 Motor_status motor_status; 
 ISR(USART_RX_vect){
@@ -90,41 +94,31 @@ ISR(USART_RX_vect){
 	char c = UDR0;
 	static int counter = 0; 
 	static int sign;
-	static float angle; 
 	/*finit state machine for recieving data frame */
 	switch(parse_state){
-				case WAIT: 
+				case P_WAIT: 
 					if(c == 'M'){
-						parse_state =MOTOR;
-						angle = 0; 
+						parse_state = P_MOTOR_SELECT;
 					}
 					break;
-				case MOTOR: 
+				case P_MOTOR_SELECT: 
 					motor_status.motor_select = c-48; 
-					parse_state = SIGN;
+					parse_state = P_DATA;
+					counter = 0;
 					break; 
-				case SIGN:
-					parse_state = ANGLE;
-					if(c == '-'){
-						sign = -1; 	
-					}else if(c == '+'){
-						sign = 1; 		
-					}else{
-						parse_state = WAIT;
+				case P_DATA:
+					motor_status.data[counter] = c;
+					counter++;
+					if(counter == 8){
+						parse_state = P_WAIT; 
+						motor_status.done = 1;
 					}
-					counter = 3;
+				
 					break; 
-				case ANGLE: 
-					/*5328 is the conversion from ascii to int: 48*100+48*10+48=5328*/
-					/*Todo instead of sending the numbers in ascii send it in raw binary*/
-					counter--;
-					angle += (c-48)*pow(10,counter);  
-					if(counter == 0){
-						motor_status.angle = angle * sign;
-						parse_state = WAIT; 
-						motor_status.done = 1; 
-					}
-					break; 
+				case P_DONE:
+					parse_state = P_WAIT;
+						
+
 		}	
 		
 
@@ -208,24 +202,43 @@ int main(void)
 	uint32_t pid_timer = 0; 
 	
 	DDRB |= M0_DIR | M0_STEP | M1_STEP | M1_DIR;
-	StepperMotor stepper0(0,0.05,M0_DIR,M0_STEP);
+	StepperMotor stepper0(0,0.043182,M0_DIR,M0_STEP);
+	StepperMotor stepper1(0,0.2571426, M1_DIR,M1_STEP); 
+	usart_sendln("Hello world!");
     while (1) 
     {
+		
 		/*character FSM */ 
 		char buff[50]; 
 		if(motor_status.done == 1){
-			sprintf(buff,"Motor %d, angle =  %d\n",motor_status.motor_select,motor_status.angle);
+	//		sprintf(buff,"Motor %d, angle =  %d\n",motor_status.motor_select,motor_status.angle);
 	//		usart_send(buff);
 			motor_status.done = 0; 
+			uint16_t duration = (motor_status.data[0]-48)*10 + (motor_status.data[1]-48);
+			uint16_t acceleration = (motor_status.data[2]-48)*10 + (motor_status.data[3]-48);
+			int16_t angle = (motor_status.data[5]-48)*100 + (motor_status.data[6]-48)*10 + (motor_status.data[7]-48);
+
+			usart_sendln((int)duration);
+			usart_sendln((int)acceleration);
+			usart_sendln(angle);
+			if(motor_status.data[4] == '-'){
+				angle = angle * -1;
+			}
 			switch(motor_status.motor_select){
 				case 0 : 
-					servo0.target_pos = motor_status.angle; 
+					servo0.target_pos = angle; 
 					break;
 				case 1 :
-					stepper0.target_pos = motor_status.angle; 
+					stepper0.target_pos = angle; 
+					stepper0.duration = duration;
+					stepper0.acceleration = acceleration;
 					stepper0.start = 1; 
 					break; 
 				case 2 : 
+					stepper1.target_pos = angle; 
+					stepper1.duration = duration;
+					stepper1.acceleration = acceleration;
+					stepper1.start = 1;
 					break;
 			}
 		}
@@ -239,6 +252,7 @@ int main(void)
 		servo_rotate(output,&SERVO_0_PWM,SERVO_0_DIR_A,SERVO_0_DIR_B);
 	
 		stepper0.rotate(timer_10k());
+		stepper1.rotate(timer_10k());
 		tacho_values= PIND;
 		if (tacho_state == 0){
 			if (PIND & TACHO_0_P){

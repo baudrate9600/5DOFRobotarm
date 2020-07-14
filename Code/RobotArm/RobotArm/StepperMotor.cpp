@@ -44,13 +44,11 @@ int StepperMotor::rotate(uint32_t current_time){
 			start = 0; 
 		}
 
-		acceleration = 1;
-		duration = 10;
 		/* Compute parameters */
 		num_steps = angle*step_to_angle;
 		uint16_t vmax= 0.5*(acceleration*duration-sqrt(pow(acceleration*duration,2)-(angle*acceleration*4)));
-		t0=(pow(vmax,2)*num_steps)/(2*angle*acceleration)-1;
-		t1 =num_steps-t0-2;
+		t0=(pow(vmax,2)*num_steps)/(2*angle*acceleration);
+		t1 =num_steps-t0;
 		num_steps--;
 		pulse_width =10000* sqrt(2/(acceleration*step_to_angle));
 		/* End  computations */
@@ -60,6 +58,7 @@ int StepperMotor::rotate(uint32_t current_time){
 		start = 2; 
 		
 		usart_sendln("####################"); 
+		usart_send("Step to angle");usart_send((int)step_to_angle);
 		usart_send("vmax ");usart_sendln((int)vmax); 			
 		usart_send("#n ");usart_sendln((int)num_steps); 			
 		usart_send("t0 ");usart_sendln((int)t0); 			
@@ -79,7 +78,12 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 		stepper_time = current_time;
 		switch(state){
 			case S_ACCEL:
-				pulse_width=(int)pulse_width-(2*(int)pulse_width)/(4.0*pulse_width_counter  +1);		
+				pulse_width=(int)pulse_width-(2*(int)pulse_width)/(4.0*pulse_width_counter  +1);	
+					
+				if (pulse_width <= 10){
+					pulse_width = 10;
+				}
+				usart_sendln(pulse_width);
 				if(step_counter ==  t0){
 					//usart_send("STATE : ACCEL ");usart_sendln((int)step_counter);
 					//usart_send("Pulse time ");usart_sendln((int)pulse_width); 
@@ -93,7 +97,7 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 					//usart_send("Pulse time ");usart_sendln((int)pulse_width); 
 					state = S_DECEL;
 					pulse_width_counter =pulse_width_counter *-1; 
-					usart_sendln(pulse_width_counter );
+				//	usart_sendln(pulse_width_counter );
 				}
 				break;
 			case S_DECEL:

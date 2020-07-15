@@ -49,7 +49,6 @@ int StepperMotor::rotate(uint32_t current_time){
 		uint16_t vmax= 0.5*(acceleration*duration-sqrt(pow(acceleration*duration,2)-(angle*acceleration*4)));
 		t0=(pow(vmax,2)*num_steps)/(2*angle*acceleration);
 		t1 =num_steps-t0;
-		num_steps--;
 		pulse_width =10000* sqrt(2/(acceleration*step_to_angle));
 		/* End  computations */
 
@@ -58,7 +57,9 @@ int StepperMotor::rotate(uint32_t current_time){
 		start = 2; 
 		
 		usart_sendln("####################"); 
-		usart_send("Step to angle");usart_send((int)step_to_angle);
+		usart_send("Angle ");usart_sendln((int)angle);  
+		usart_send("duration ");usart_sendln((int)duration);
+		usart_send("Acceleration ");usart_sendln((int)acceleration);
 		usart_send("vmax ");usart_sendln((int)vmax); 			
 		usart_send("#n ");usart_sendln((int)num_steps); 			
 		usart_send("t0 ");usart_sendln((int)t0); 			
@@ -83,29 +84,21 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 				if (pulse_width <= 10){
 					pulse_width = 10;
 				}
-				usart_sendln(pulse_width);
-				if(step_counter ==  t0){
-					//usart_send("STATE : ACCEL ");usart_sendln((int)step_counter);
-					//usart_send("Pulse time ");usart_sendln((int)pulse_width); 
+				if( step_counter >=  t0){
 					state = S_CONSTANT;
 				}	
 				pulse_width_counter ++;
 				break; 
 			case S_CONSTANT:
-				if(step_counter == t1){
-					//usart_send("STATE : CONSTANT ");usart_sendln((int)step_counter); 
-					//usart_send("Pulse time ");usart_sendln((int)pulse_width); 
+				if(step_counter >= t1){
 					state = S_DECEL;
 					pulse_width_counter =pulse_width_counter *-1; 
-				//	usart_sendln(pulse_width_counter );
-				}
+					}
 				break;
 			case S_DECEL:
 				pulse_width=(pulse_width-(2*pulse_width)/(4*pulse_width_counter  +1));		
-				if(step_counter == num_steps){
-					//usart_send("STATE : Decel ");usart_sendln((int)step_counter);
-					//usart_send("Pulse time ");usart_sendln((int)pulse_width); 
-					start = 0; 
+				if(step_counter >= num_steps){
+							start = 0; 
 				}
 				pulse_width_counter ++;
 				break;

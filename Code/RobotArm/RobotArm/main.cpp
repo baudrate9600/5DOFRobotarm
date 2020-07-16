@@ -4,7 +4,7 @@
  * Created: 6/12/2020 8:42:41 PM
  * Author : Olasoji Makinwa 
  */ 
-//#define DEBUG_
+#define DEBUG_
 
 #include <avr/io.h>
 #include <avr/interrupt.h>

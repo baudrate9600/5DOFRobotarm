@@ -6,6 +6,8 @@
 */
 
 
+#define DEBUG_
+
 #include <avr/io.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -63,8 +65,8 @@ int StepperMotor::rotate(uint32_t current_time){
 		usart_send("Acceleration ");usart_sendln((int)acceleration);
 		usart_send("vmax ");usart_sendln((int)vmax); 			
 		usart_send("#n ");usart_sendln((int)num_steps); 			
-		usart_send("t1 ");usart_sendln((int)t0); 			
-		usart_send("t0 ");usart_sendln((int)t1); 			
+		usart_send("t0 ");usart_sendln((int)t0); 			
+		usart_send("t1 ");usart_sendln((int)t1); 			
 		usart_send("Step time ");usart_sendln((int)pulse_width);
 		usart_sendln("####################"); 		
 		#endif // DEBUG
@@ -88,6 +90,10 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 					pulse_width = 10;
 				}
 				if( step_counter >=  t0){
+					#ifdef DEBUG_
+						usart_send("S_ACCEL ");
+						usart_sendln(pulse_width);
+					#endif
 					state = S_CONSTANT;
 				}	
 				pulse_width_counter ++;
@@ -96,12 +102,16 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 				if(step_counter >= t1){
 					state = S_DECEL;
 					pulse_width_counter =pulse_width_counter *-1; 
+						usart_send("S_CONSTANT ");
+						usart_sendln(pulse_width);
 					}
 				break;
 			case S_DECEL:
 				pulse_width=(pulse_width-(2*pulse_width)/(4*pulse_width_counter  +1));		
 				if(step_counter >= num_steps){
 							start = 0; 
+						usart_send("S_DECEL ");
+						usart_sendln(pulse_width);
 				}
 				pulse_width_counter ++;
 				break;

@@ -4,6 +4,8 @@
 
 main.cpp
 
+ServoMotor.cpp
+
 StepperMotor.cpp
 
 timer.cpp

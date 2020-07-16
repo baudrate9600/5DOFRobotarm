@@ -4,6 +4,7 @@
  * Created: 6/12/2020 8:42:41 PM
  * Author : Olasoji Makinwa 
  */ 
+//#define DEBUG_
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -13,14 +14,15 @@
 #include "Usart.h"
 #include "timer.h"
 #include "StepperMotor.h"
+#include "ServoMotor.h"
 
-#define TACHO_0_P (1 << PORTD2)
-#define TACHO_0_M (1 << PORTD5)
+#define SERVO_TACHO_0_P (1 << PORTD2)
+#define SERVO_TACHO_0_M (1 << PORTD5)
 #define SERVO_0_EN (1 << PORTD3)
 #define SERVO_0_DIR_A (1 << PORTD6)
 #define SERVO_0_DIR_B (1 << PORTD7) 
 
-#define SERVO_0_PWM OCR2B
+#define SERVO0_PWM OCR2B
 
 #define SERVO_REGISTER PORTD 
 
@@ -176,35 +178,26 @@ int main(void)
 	timer_enable();	
 	usart_enable(9600);
 	/* Initialize motors */ 
-//	Stepper_motor motor0(M0_STEP,M0_DIR,0.23,&DDRD);
 	
     /* Replace with your application code */
 	uint8_t tacho_values;
-	uint8_t tacho_state = 0;
-	int16_t tacho = 0;
-	DDRD &= ~TACHO_0_M;
-	DDRD &= ~TACHO_0_P; 
+	uint8_t old_tacho_values;
+	DDRD &= ~SERVO_TACHO_0_M;
+	DDRD &= ~SERVO_TACHO_0_P; 
 
 	/* Initialize servo motors */
 	DDRD |= SERVO_0_EN | SERVO_0_DIR_A | SERVO_0_DIR_B;
 	TCCR2A |= (1 << COM2B1 ) | (1 << WGM21) | (1 << WGM20); /*Fast PWM */
 	TCCR2B |= (1 << CS20); /*No prescaling */
 	/* PID */
-	int16_t error = 0;	
-	
-	Servo_motor servo0 ={0};
-	servo0.P= 5; 		
-	servo0.I= 0.1; 
-	servo0.max_integral = 255; 
-	int output = 0; 	
-	
-	uint32_t curtime = 0; 	
-	uint32_t pid_timer = 0; 
-	
+		
 	DDRB |= M0_DIR | M0_STEP | M1_STEP | M1_DIR;
 	StepperMotor stepper0(0,0.043182,M0_DIR,M0_STEP);
 	StepperMotor stepper1(0,0.2571426, M1_DIR,M1_STEP); 
-	usart_sendln("Hello world!");
+	ServoMotor  servo0(&SERVO0_PWM,&SERVO_REGISTER,SERVO_0_DIR_A,SERVO_0_DIR_B);
+	servo0.target_pos = 0;
+	servo0.set_pid(10,0,0);
+	uint32_t temp = 0 ;
     while (1) 
     {
 		
@@ -218,14 +211,12 @@ int main(void)
 			uint16_t acceleration = (motor_status.data[2]-48)*10 + (motor_status.data[3]-48);
 			int16_t angle = (motor_status.data[5]-48)*100 + (motor_status.data[6]-48)*10 + (motor_status.data[7]-48);
 
-			usart_sendln((int)duration);
-			usart_sendln((int)acceleration);
-			usart_sendln(angle);
 			if(motor_status.data[4] == '-'){
 				angle = angle * -1;
 			}
 			switch(motor_status.motor_select){
 				case 0 : 
+					//usart_send("hello");
 					servo0.target_pos = angle; 
 					break;
 				case 1 :
@@ -243,32 +234,25 @@ int main(void)
 			}
 		}
 
-		if(output > 255){
-			output = 255; 
-		}else if(output < -255){
-			output = -255;
-		}
-		//usart_sendln(temp);	
-		servo_rotate(output,&SERVO_0_PWM,SERVO_0_DIR_A,SERVO_0_DIR_B);
-	
+			//usart_sendln(temp);	
+		
 		stepper0.rotate(timer_10k());
 		stepper1.rotate(timer_10k());
-		tacho_values= PIND;
-		if (tacho_state == 0){
-			if (PIND & TACHO_0_P){
-				if(PIND & TACHO_0_M){
-					servo0.current_pos++;
-				}else{
-					servo0.current_pos--;
-				}
-				tacho_state = 1; 
-			}
-		}else{
-			if (!(PIND & TACHO_0_P)){
-				tacho_state = 0; 
-			}
+		servo0.rotate(timer_10k());
+	
+		tacho_values= PIND; 
+		servo0.tacho(PIND & SERVO_TACHO_0_P, PIND & SERVO_TACHO_0_M);
+		/*Check if any bits have toggled */
+		if(tacho_values ^ old_tacho_values){
+			old_tacho_values = tacho_values;
+			
 		}
+		if(timer_10k()-temp > 100){
+		//	usart_sendln()
+		//usart_sendln(servo0.absolute_position);
 		}
+		
+	}
 }
 
 

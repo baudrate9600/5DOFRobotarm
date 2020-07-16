@@ -55,6 +55,7 @@ int StepperMotor::rotate(uint32_t current_time){
 		step_counter  = 0;
 		pulse_width_counter  = 1; 
 		start = 2; 
+		#ifdef DEBUG_
 		
 		usart_sendln("####################"); 
 		usart_send("Angle ");usart_sendln((int)angle);  
@@ -62,10 +63,12 @@ int StepperMotor::rotate(uint32_t current_time){
 		usart_send("Acceleration ");usart_sendln((int)acceleration);
 		usart_send("vmax ");usart_sendln((int)vmax); 			
 		usart_send("#n ");usart_sendln((int)num_steps); 			
-		usart_send("t0 ");usart_sendln((int)t0); 			
-		usart_send("t1 ");usart_sendln((int)t1); 			
+		usart_send("t1 ");usart_sendln((int)t0); 			
+		usart_send("t0 ");usart_sendln((int)t1); 			
 		usart_send("Step time ");usart_sendln((int)pulse_width);
-		usart_sendln("####################"); 	
+		usart_sendln("####################"); 		
+		#endif // DEBUG
+	
 	}else if(start == 2){
 		fsm(current_time); 
 	}

@@ -6,7 +6,6 @@
 */
 
 
-#define DEBUG_
 
 #include <avr/io.h>
 #include <stdio.h>
@@ -14,6 +13,10 @@
 #include <math.h>
 #include "Usart.h"
 #include "StepperMotor.h"
+
+
+#define DEBUG_
+#define S_SCALER 1000UL
 
 /* Iniatialize the stepper motor */
 StepperMotor::StepperMotor(int16_t current_pos, float step_to_angle, uint8_t dir_pin, uint8_t step_pin)
@@ -25,7 +28,7 @@ StepperMotor::StepperMotor(int16_t current_pos, float step_to_angle, uint8_t dir
 	this->dir_pin		= dir_pin;
 	this->step_pin		= step_pin;		
 	stepper_time = 0;
-	pulse_width = 0;
+	long_pulse_width = 0;
 } 
 
 
@@ -51,11 +54,12 @@ int StepperMotor::rotate(uint32_t current_time){
 		uint16_t vmax= 0.5*(acceleration*duration-sqrt(pow(acceleration*duration,2)-(angle*acceleration*4)));
 		t0=(pow(vmax,2)*num_steps)/(2*angle*acceleration);
 		t1 =num_steps-t0;
-		pulse_width =10000* sqrt(2/(acceleration*step_to_angle));
+		long_pulse_width =10000* sqrt(2/(acceleration*step_to_angle)) * S_SCALER;
 		/* End  computations */
 
 		step_counter  = 0;
 		pulse_width_counter  = 1; 
+		pulse_width = long_pulse_width / S_SCALER;
 		start = 2; 
 		#ifdef DEBUG_
 		
@@ -67,10 +71,11 @@ int StepperMotor::rotate(uint32_t current_time){
 		usart_send("#n ");usart_sendln((int)num_steps); 			
 		usart_send("t0 ");usart_sendln((int)t0); 			
 		usart_send("t1 ");usart_sendln((int)t1); 			
-		usart_send("Step time ");usart_sendln((int)pulse_width);
+		usart_send("Long Step time ");usart_sendln(long_pulse_width);
+		usart_send("Step time ");usart_sendln(pulse_width);
 		usart_sendln("####################"); 		
 		#endif // DEBUG
-	
+		stepper_time = current_time; 
 	}else if(start == 2){
 		fsm(current_time); 
 	}
@@ -80,38 +85,46 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 {
 	STEPPER_REGISTER |= step_pin;
 	/*Generate pulses at a frequency of step time*/
-	if(current_time - stepper_time > pulse_width){
+	if((current_time - stepper_time) > pulse_width){
 		stepper_time = current_time;
 		switch(state){
+			/*Linearly accelerate */
 			case S_ACCEL:
-				pulse_width=(int)pulse_width-(2*(int)pulse_width)/(4.0*pulse_width_counter  +1);	
-					
-				if (pulse_width <= 10){
-					pulse_width = 10;
-				}
+				long_pulse_width=(long_pulse_width-(2UL*long_pulse_width)/(4UL*pulse_width_counter  +1UL));	
+				pulse_width = long_pulse_width / S_SCALER;
+			//	usart_sendln(step_counter);	
+			
 				if( step_counter >=  t0){
 					#ifdef DEBUG_
-						usart_send("S_ACCEL ");
+						usart_send("S_ACCEL");
 						usart_sendln(pulse_width);
 					#endif
 					state = S_CONSTANT;
 				}	
 				pulse_width_counter ++;
 				break; 
+			/*Rotate at a constant velocity */
 			case S_CONSTANT:
 				if(step_counter >= t1){
 					state = S_DECEL;
 					pulse_width_counter =pulse_width_counter *-1; 
+					#ifdef DEBUG_
 						usart_send("S_CONSTANT ");
 						usart_sendln(pulse_width);
+					#endif
 					}
 				break;
+			/*Linearly decelerate */
 			case S_DECEL:
-				pulse_width=(pulse_width-(2*pulse_width)/(4*pulse_width_counter  +1));		
+				long_pulse_width=(long_pulse_width-(2*long_pulse_width)/(4*pulse_width_counter  +1));		
+				pulse_width = long_pulse_width / S_SCALER;
+			//	usart_sendln(step_counter);	
 				if(step_counter >= num_steps){
 							start = 0; 
+					#ifdef DEBUG_
 						usart_send("S_DECEL ");
-						usart_sendln(pulse_width);
+						usart_sendln(long_pulse_width);
+					#endif
 				}
 				pulse_width_counter ++;
 				break;

@@ -55,7 +55,8 @@ public:
 	/*Duration of the rotation*/
 	uint16_t duration; 
 
-	int16_t pulse_width;
+	int32_t long_pulse_width;
+	uint32_t pulse_width;
 
 	int16_t pulse_width_counter ;
 	uint16_t step_counter;

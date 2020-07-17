@@ -13,7 +13,7 @@ apw = 0;
 total_time = c0/10000; 
 for c = 1:t0-1
     pw = pw - (2*pw)/(4*c+1);
-    disp(pw);
+  %  disp(pw);
    % total_time = total_time + pw/10000;
     %apw=apw+c0*( sqrt(c+1)-sqrt(c) )/10000;
 end

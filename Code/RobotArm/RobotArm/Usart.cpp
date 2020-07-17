@@ -66,6 +66,27 @@ void usart_send(int integer){
 		usart_send(buffer[i]);
 	}	
 }
+void usart_send(int32_t integer){
+	char buffer[11];
+	ltoa(integer,buffer,10); 
+	for(int i = 0; buffer[i] != 0; i++){
+		usart_send(buffer[i]);
+	}	
+}
+void usart_send(uint16_t number){
+	char buffer[10];
+	utoa(number,buffer,10);
+	for(int i = 0; buffer[i] !=0; i++){
+		usart_send(buffer[i]);
+	}
+}
+void usart_send(uint32_t number){
+	char buffer[11];
+	ultoa(number,buffer,10);
+	for(int i = 0; buffer[i] !=0; i++){
+		usart_send(buffer[i]);
+	}
+}
 //Send string 
 void usart_send(char * text){
 	char * index = text;
@@ -90,5 +111,20 @@ void usart_sendln(char character){
 	usart_newline();	
 }
 
+
+void usart_sendln(uint32_t number){
+	usart_send(number);
+	usart_newline();
+}
+
+void usart_sendln(uint16_t number){
+	usart_send(number);
+	usart_newline();
+}
+
+void usart_sendln(int32_t number){
+	usart_send(number);
+	usart_newline();
+}
 
 

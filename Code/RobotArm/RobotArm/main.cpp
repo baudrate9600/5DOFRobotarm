@@ -198,7 +198,7 @@ int main(void)
 	servo0.target_pos = 0;
 	servo0.set_pid(10,0,0);
 	uint32_t temp = 0 ;
-    while (1) 
+	while (1) 
     {
 		
 		/*character FSM */ 

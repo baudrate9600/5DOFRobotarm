@@ -31,10 +31,16 @@ void usart_send(int);
 void usart_send(char);
 void usart_send(float,int);
 void usart_send(char *);
+void usart_send(int32_t);
+void usart_send(uint16_t);
+void usart_send(uint32_t);
 
 void usart_sendln(int);
 void usart_sendln(char);
 void usart_sendln(float);
 void usart_sendln(char *);
+void usart_sendln(uint16_t); 
+void usart_sendln(uint32_t);
+void usart_sendln(int32_t);
 void usart_newline();
 #endif /* USART_H_ */

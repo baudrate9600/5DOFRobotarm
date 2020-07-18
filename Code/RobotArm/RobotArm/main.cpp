@@ -3,8 +3,30 @@
  * This code controlles stepper motors for a robot arm
  * Created: 6/12/2020 8:42:41 PM
  * Author : Olasoji Makinwa 
+ *			 _______
+ * RESET ---|  |_|	|--- PC5
+ * PD0   ---|		|--- PC4
+ * PD1   ---|		|--- PC3
+ * PD2   ---| Atmega|--- PC2
+ * PD3   ---|328p   |--- PC1
+ * PD4   ---|		|--- PC0
+ * VCC   ---|		|--- GND
+ * GND   ---|       |--- AREF
+ * PB6   ---|		|--- AVCC
+ * PB7   ---|		|--- PB5
+ * PB5   ---|		|--- PB4
+ * PD6   ---|		|--- PB3
+ * PD7   ---|		|--- PB2
+ * PB0   ---|_______|--- PB1
+ *
+ *
+ *
+ *
+ *
+ *
+ 
  */ 
-#define DEBUG_
+//#define DEBUG_
 
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -196,7 +218,7 @@ int main(void)
 	StepperMotor stepper1(0,0.2571426, M1_DIR,M1_STEP); 
 	ServoMotor  servo0(&SERVO0_PWM,&SERVO_REGISTER,SERVO_0_DIR_A,SERVO_0_DIR_B);
 	servo0.target_pos = 0;
-	servo0.set_pid(10,0,0);
+	servo0.set_pid(20,1,0);
 	uint32_t temp = 0 ;
 	while (1) 
     {
@@ -217,6 +239,7 @@ int main(void)
 			switch(motor_status.motor_select){
 				case 0 : 
 					//usart_send("hello");
+					servo0.reset_summation();
 					servo0.target_pos = angle; 
 					break;
 				case 1 :

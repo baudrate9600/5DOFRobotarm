@@ -17,13 +17,14 @@ public:
 uint16_t P_factor;
 uint16_t I_factor; 
 uint16_t D_factor;
-int16_t max_summation;
-uint8_t max_error; 
-int16_t target_pos;
-int16_t absolute_position; 
+int32_t summation;
+int32_t max_summation;
+int32_t max_error; 
+int32_t target_pos;
+int32_t absolute_position; 
 int32_t derivative_term;
 int32_t integral_term;
-int16_t error; 
+int32_t error; 
 protected:
 private:
 
@@ -51,6 +52,7 @@ public:
 	void set_pid(uint16_t P, uint16_t I, uint16_t D);
 	void tacho(uint8_t plus,uint8_t min);
 	void rotate(uint32_t current_time);
+	void reset_summation();
 	~ServoMotor();
 protected:
 private:

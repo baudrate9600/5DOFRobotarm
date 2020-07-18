@@ -123,7 +123,7 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 							start = 0; 
 					#ifdef DEBUG_
 						usart_send("S_DECEL ");
-						usart_sendln(long_pulse_width);
+						usart_sendln(pulse_width);
 					#endif
 				}
 				pulse_width_counter ++;

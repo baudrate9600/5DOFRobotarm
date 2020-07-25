@@ -110,6 +110,11 @@ void ServoMotor::tacho(uint8_t plus, uint8_t min){
 
 }
 
+void ServoMotor::reset(){
+	absolute_position = 0; 
+	target_pos = 0; 
+}
+
 void ServoMotor::reset_summation(){
 	summation = 0; 
 }

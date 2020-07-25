@@ -136,7 +136,10 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 	
 	return state;
 }
-
+void StepperMotor::reset(){
+	current_pos = 0; 
+	target_pos  = 0; 
+}
 // default destructor
 StepperMotor::~StepperMotor()
 {

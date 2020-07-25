@@ -82,6 +82,7 @@ public:
 	int rotate(uint32_t current_time);
 	stepper_fsm fsm(uint32_t current_time);
 	int step(); 
+	void reset();
 	~StepperMotor();
 protected:
 private:

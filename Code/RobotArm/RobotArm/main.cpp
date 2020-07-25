@@ -103,6 +103,7 @@ volatile bool received_byte= false;
 typedef enum  {P_WAIT,
 			   P_MOTOR_SELECT,
 			   P_DATA,
+			   P_RESET,
 			   P_DONE }parse_fsm;	
 parse_fsm parse_state = P_WAIT;
 
@@ -123,6 +124,8 @@ ISR(USART_RX_vect){
 				case P_WAIT: 
 					if(c == 'M'){
 						parse_state = P_MOTOR_SELECT;
+					}else if(c== 'R'){
+						parse_state = P_RESET;
 					}
 					break;
 				case P_MOTOR_SELECT: 
@@ -139,10 +142,9 @@ ISR(USART_RX_vect){
 					}
 				
 					break; 
-				case P_DONE:
-					parse_state = P_WAIT;
-						
-
+				case P_RESET:
+							
+					break;
 		}	
 		
 
@@ -255,6 +257,8 @@ int main(void)
 					stepper1.start = 1;
 					break;
 			}
+		}else if(motor_status.done ==2){
+			
 		}
 
 			//usart_sendln(temp);	

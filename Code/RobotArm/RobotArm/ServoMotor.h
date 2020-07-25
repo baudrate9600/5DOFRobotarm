@@ -49,6 +49,7 @@ uint8_t dir_a,dir_b;
 //functions
 public:
 	ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register ,uint8_t dir_a,uint8_t dir_b);
+	void reset();
 	void set_pid(uint16_t P, uint16_t I, uint16_t D);
 	void tacho(uint8_t plus,uint8_t min);
 	void rotate(uint32_t current_time);

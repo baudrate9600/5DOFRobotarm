@@ -44,13 +44,18 @@ shift register
 #define ENDEFF_PWM  OCR1B
 /* Servo Motor defines */
 #define SERVO0		(1 << PORTD2)
-#define SERVO0_DIRA (1 << 2); 
-#define SERVO0_DIRB (1 << 3); 
+#define SERVO0_DIRA (1 << 2)
+#define SERVO0_DIRB (1 << 3) 
 #define SERVO0_PWM	OCR0B
-#define SERVO1_DIRA (1 << 4); 
-#define SERVO1_DIRB (1 << 5); 
-#define SERVO2_DIRA (1 << 6); 
-#define SERVO2_DIRB (1 << 7); 
+#define SERVO1_DIRA (1 << 4) 
+#define SERVO1_DIRB (1 << 5) 
+#define SERVO2_DIRA (1 << 6) 
+#define SERVO2_DIRB (1 << 7) 
+
+/* Stepper motor defines */ 
+
+#define STEPPER0_DIR (1 << PORTD2)
+#define STEPPER0_STEP (1 << PORTD4)
 
 
 
@@ -96,12 +101,13 @@ ISR(USART_RX_vect){
 				case RECEIVE_WAIT : 
 					if(c == 'M'){
 						receive_state = RECEIVE_MOTOR_SELECT;
-					}else if(c== 'R'){
-						receive_state = RECEIVE_RESET;
+					}else if(c== 'r'){
+						UDR0 = 'k';
+						receive_state = RECEIVE_WAIT;
 					}
 					break;
 				case RECEIVE_MOTOR_SELECT: 
-					motor_status.motor_select = c-48; 
+					motor_status.motor_select = c; 
 					receive_state = RECEIVE_DATA;
 					counter = 0;
 					break; 
@@ -114,9 +120,6 @@ ISR(USART_RX_vect){
 					}
 				
 					break; 
-				case RECEIVE_RESET:
-							
-					break;
 		}	
 }
 
@@ -158,18 +161,43 @@ int main(void)
 	/* Servo 2 */
 	TCCR1A |= (1 << COM1A1) | (1 << WGM12) | (1 << WGM10); 
 	
+	/*Stepper motor */
+	DDRD |= (STEPPER0_DIR) | (STEPPER0_STEP); 
+	StepperMotor stepper0(0,0.043182,STEPPER0_DIR,STEPPER0_STEP);
 	/* Clear shift register */
 	direction_signal.direction = 0;
 	direction_signal.previous_direction = 0; 	
 	direction_signal.direction |= SERVO0_DIRA;
 	spi_send_direction();	
 	SERVO0_PWM = 40;
+	/* Init Usart */
+	usart_enable(9600);
+	timer_enable();
+//	usart_send("i wot m");
+	sei();
 	while (1){
-    
-		
-		
-
-		
+		if (motor_status.done == 1)
+		{
+			motor_status.done = 0; 
+			uint16_t duration = motor_status.data[0]*10 + motor_status.data[1]-48;
+			uint16_t acceleration = motor_status.data[2]*10 + motor_status.data[3];
+			int16_t angle = motor_status.data[5]*100 + motor_status.data[6]*10 + motor_status.data[7];
+			if(motor_status.data[4] == '-'){
+				angle = angle * -1;
+			}
+			switch (motor_status.motor_select)
+			{
+				case 0 :
+				stepper0.target_pos = angle; 
+				stepper0.duration = duration;
+				stepper0.acceleration = acceleration;
+				stepper0.start = 1; 
+				break; 
+			}
+			
+		}
+		stepper0.rotate(timer_10k());
+//		usart_sendln(timer_10k());
 	}
 }
 

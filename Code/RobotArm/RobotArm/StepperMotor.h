@@ -10,7 +10,7 @@
 #define __STEPPERMOTOR_H__
 
 /*ideally the stepper motor should all be connected to the same register*/
-#define STEPPER_REGISTER PORTB
+#define STEPPER_REGISTER PORTD
 
 /* Finite state machine of the stepper motor
  * S_ACCEL   : accelerate until t_0 

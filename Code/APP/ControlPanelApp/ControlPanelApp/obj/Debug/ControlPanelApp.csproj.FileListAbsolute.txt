@@ -1,0 +1,10 @@
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\bin\Debug\ControlPanelApp.exe.config
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\bin\Debug\ControlPanelApp.exe
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\bin\Debug\ControlPanelApp.pdb
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\obj\Debug\ControlPanelApp.csprojAssemblyReference.cache
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\obj\Debug\ControlPanelApp.Properties.Resources.resources
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\obj\Debug\ControlPanelApp.csproj.GenerateResource.cache
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\obj\Debug\ControlPanelApp.csproj.CoreCompileInputs.cache
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\obj\Debug\ControlPanelApp.exe
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\obj\Debug\ControlPanelApp.pdb
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\ControlPanelApp\ControlPanelApp\obj\Debug\ControlPanelApp.Form1.resources

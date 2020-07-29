@@ -15,18 +15,18 @@ uint32_t timer_counter;
 //https://www.arduinoslovakia.eu/application/timer-calculator
 void timer_enable(){
 	// Clear registers
-	TCCR1A = 0;
-	TCCR1B = 0;
-	TCNT1 = 0;
+	TCCR2A = 0;
+	TCCR2B = 0;
+	TCNT2 = 0;
 
 	// 10000 Hz (16000000/((24+1)*64))
-	OCR1A = 24;
+	OCR2A = 24;
 	// CTC
-	TCCR1B |= (1 << WGM12);
+	TCCR2A |= (1 << WGM21);
 	// Prescaler 64
-	TCCR1B |= (1 << CS11) | (1 << CS10);
+	TCCR2B |= (1 << CS22);
 	// Output Compare Match A Interrupt Enable
-	TIMSK1 |= (1 << OCIE1A);
+	TIMSK2 |= (1 << OCIE2A);
 	timer_counter = 0;
 }
 //Stop the  timer
@@ -46,6 +46,6 @@ uint32_t timer_10k(){
 }
 
 //interrupt vector 
-ISR (TIMER1_COMPA_vect) {
+ISR (TIMER2_COMPA_vect) {
 	timer_counter++;
 }

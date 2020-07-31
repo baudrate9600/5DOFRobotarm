@@ -1,10 +1,13 @@
 ﻿  Controlpanel.cpp
 C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(10,1): warning C4005: 'ESC': macro redefinition
 C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\terminal.h(3): message : see previous definition of 'ESC'
-C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(184,23): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(187,71): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
-C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(191,20): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
-C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(193,72): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
-C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(157,7): warning C4101: 'input': unreferenced local variable
-C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(143,7): warning C4101: 'buffer': unreferenced local variable
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(101,23): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(105,45): warning C4244: '=': conversion from 'double' to 'int', possible loss of data
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(111,20): warning C4244: 'initializing': conversion from 'double' to 'float', possible loss of data
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(216,12): warning C4477: 'scanf_s' : format string '%d' requires an argument of type 'int *', but variadic argument 1 has type 'char *'
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(216,12): message : consider using '%hhd' in the format string
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(239,12): warning C4477: 'scanf_s' : format string '%d' requires an argument of type 'int *', but variadic argument 1 has type 'char *'
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(239,12): message : consider using '%hhd' in the format string
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(195,7): warning C4101: 'input': unreferenced local variable
+C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Controlpanel\Controlpanel.cpp(181,7): warning C4101: 'buffer': unreferenced local variable
   Controlpanel.vcxproj -> C:\Users\sojim\Documents\Project\Robotarm_v2\Code\APP\Controlpanel\Debug\Controlpanel.exe

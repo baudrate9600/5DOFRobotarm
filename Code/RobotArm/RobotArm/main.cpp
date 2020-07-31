@@ -57,20 +57,13 @@ shift register
 #define STEPPER0_DIR (1 << PORTD2)
 #define STEPPER0_STEP (1 << PORTD4)
 
+#define STEPPER1_DIR (1 << PORTD7) 
+#define STEPPER1_STEP (1 << PORTD3)
 
 
 
 
 
-
-#define SERVO0_PWM OCR2B
-
-#define SERVO_REGISTER PORTD 
-
-#define M0_STEP (1 << PORTB0)  
-#define M0_DIR	(1 << PORTB1)
-#define M1_STEP (1 << PORTB2) 
-#define M1_DIR  (1 << PORTB3)
 
 
 /* States of the receive FSM 
@@ -91,6 +84,7 @@ struct Motor_status{
 	int done;
 	};
 Motor_status motor_status; 
+volatile int wakeup;
 ISR(USART_RX_vect){
 	motor_status.done = 0; 
 	char c = UDR0;
@@ -99,11 +93,13 @@ ISR(USART_RX_vect){
 	/*finite state machine for receiving data frame */
 	switch(receive_state){
 				case RECEIVE_WAIT : 
-					if(c == 'M'){
+					if(c == 'm'){
 						receive_state = RECEIVE_MOTOR_SELECT;
 					}else if(c== 'r'){
 						UDR0 = 'k';
 						receive_state = RECEIVE_WAIT;
+						motor_status.done = 1;
+						wakeup = 1;
 					}
 					break;
 				case RECEIVE_MOTOR_SELECT: 
@@ -116,8 +112,10 @@ ISR(USART_RX_vect){
 					counter++;
 					if(counter == 8){
 						receive_state = RECEIVE_WAIT ; 
-						motor_status.done = 1;
+						motor_status.done = 2;
+						UDR0 = 'k';
 					}
+					
 				
 					break; 
 		}	
@@ -145,6 +143,7 @@ void spi_send_direction(){
 }
 int main(void)
 {
+	wakeup = 0;
 	/* Initialize SPI:	
 	 *	the SPI is used to send the direction signals to the shift register */
 	 spi_init();
@@ -162,24 +161,30 @@ int main(void)
 	TCCR1A |= (1 << COM1A1) | (1 << WGM12) | (1 << WGM10); 
 	
 	/*Stepper motor */
-	DDRD |= (STEPPER0_DIR) | (STEPPER0_STEP); 
-	StepperMotor stepper0(0,0.043182,STEPPER0_DIR,STEPPER0_STEP);
+	DDRD |= (STEPPER0_DIR) | (STEPPER0_STEP ) | (STEPPER1_DIR) | (STEPPER1_STEP);  
+	StepperMotor stepper0(0,0.2571426,STEPPER0_DIR,STEPPER0_STEP);
+	StepperMotor stepper1(0,0.043182,STEPPER1_DIR,STEPPER1_STEP);
 	/* Clear shift register */
 	direction_signal.direction = 0;
 	direction_signal.previous_direction = 0; 	
 	direction_signal.direction |= SERVO0_DIRA;
 	spi_send_direction();	
 	SERVO0_PWM = 40;
-	/* Init Usart */
+
 	usart_enable(9600);
 	timer_enable();
-//	usart_send("i wot m");
 	sei();
+	/* Wait until the reset command is sent */
+	while(wakeup == 0);
 	while (1){
-		if (motor_status.done == 1)
+		if(motor_status.done == 1){
+			stepper0.reset();
+			stepper1.reset();
+			motor_status.done = 0; 
+		} else if (motor_status.done == 2)
 		{
 			motor_status.done = 0; 
-			uint16_t duration = motor_status.data[0]*10 + motor_status.data[1]-48;
+			uint16_t duration = motor_status.data[0]*10 + motor_status.data[1];
 			uint16_t acceleration = motor_status.data[2]*10 + motor_status.data[3];
 			int16_t angle = motor_status.data[5]*100 + motor_status.data[6]*10 + motor_status.data[7];
 			if(motor_status.data[4] == '-'){
@@ -188,15 +193,22 @@ int main(void)
 			switch (motor_status.motor_select)
 			{
 				case 0 :
-				stepper0.target_pos = angle; 
-				stepper0.duration = duration;
-				stepper0.acceleration = acceleration;
-				stepper0.start = 1; 
-				break; 
+					stepper0.target_pos = angle; 
+					stepper0.duration = duration;
+					stepper0.acceleration = acceleration;
+					stepper0.start = 1; 
+					break; 
+				case 1 : 
+					stepper1.target_pos = angle;
+					stepper1.duration = duration;
+					stepper1.acceleration = acceleration;
+					stepper1.start	= 1;
+					break;
 			}
 			
 		}
 		stepper0.rotate(timer_10k());
+		stepper1.rotate(timer_10k());
 //		usart_sendln(timer_10k());
 	}
 }

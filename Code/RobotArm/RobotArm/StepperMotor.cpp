@@ -6,8 +6,9 @@
 */
 
 
-
+#define F_CPU 16000000UL
 #include <avr/io.h>
+#include <avr/delay.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -15,7 +16,7 @@
 #include "StepperMotor.h"
 
 
-#define DEBUG_
+//#define DEBUG_
 #define S_SCALER 1000UL
 
 /* Iniatialize the stepper motor */
@@ -83,17 +84,17 @@ int StepperMotor::rotate(uint32_t current_time){
 }
 stepper_fsm StepperMotor::fsm(uint32_t current_time)
 {
-	STEPPER_REGISTER |= step_pin;
 	/*Generate pulses at a frequency of step time*/
 	if((current_time - stepper_time) > pulse_width){
+		
+		STEPPER_REGISTER |= step_pin;
+		_delay_us(1);
 		stepper_time = current_time;
 		switch(state){
 			/*Linearly accelerate */
 			case S_ACCEL:
 				long_pulse_width=(long_pulse_width-(2UL*long_pulse_width)/(4UL*pulse_width_counter  +1UL));	
 				pulse_width = long_pulse_width / S_SCALER;
-			//	usart_sendln(step_counter);	
-			
 				if( step_counter >=  t0){
 					#ifdef DEBUG_
 						usart_send("S_ACCEL");
@@ -118,7 +119,6 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 			case S_DECEL:
 				long_pulse_width=(long_pulse_width-(2*long_pulse_width)/(4*pulse_width_counter  +1));		
 				pulse_width = long_pulse_width / S_SCALER;
-			//	usart_sendln(step_counter);	
 				if(step_counter >= num_steps){
 							start = 0; 
 					#ifdef DEBUG_
@@ -129,10 +129,10 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 				pulse_width_counter ++;
 				break;
 		}	
-		STEPPER_REGISTER &= ~step_pin;
 		step_counter++; 
 	}
 	
+	STEPPER_REGISTER &= ~step_pin;
 	
 	return state;
 }

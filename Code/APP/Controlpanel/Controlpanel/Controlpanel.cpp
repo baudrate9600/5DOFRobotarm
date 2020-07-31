@@ -34,6 +34,7 @@ void stepper_msg(char* buffer, int motor_select, int angle, int duration, int ac
 	buffer[4] = acceleration % 10; 
 	//Angle 
 	char sign = angle > 0 ? '+' : '-';
+	angle = abs(angle);
 	buffer[6] = sign;
 	buffer[9] = angle %10;
 	angle /= 10;
@@ -42,6 +43,85 @@ void stepper_msg(char* buffer, int motor_select, int angle, int duration, int ac
 	buffer[7] = angle % 10;
 	angle /= 10; 
 }
+#define NUM_ROWS 4 
+#define NUM_COLUMNS 6
+
+struct steppermotor {
+		int angle;
+		int duration;
+		int acceleration;
+};
+void draw_table( int width) {
+	int stride = width / NUM_COLUMNS;
+	move_xy(0, 1000);
+	printf("%s[%dA", ESC,NUM_ROWS);
+	for (int j = 0; j < NUM_ROWS; j++) {
+
+		for (int i = 0; i < width; i++) {
+			if (i % stride == 0) {
+				printf("|");
+			}
+			else {
+				printf(" ");
+			}
+		}
+		printf("\n");
+	}
+}
+/*Add elements to the table*/
+void add_element(int width,int x, int y, const char *str) {
+	int stride = width / NUM_COLUMNS;
+	move_xy(0, 1000);
+	printf("%s[%dA%s[%dC%s", ESC, NUM_ROWS-y,ESC,stride * x + 1,str);
+
+}
+/*Update stepper column and rows */
+void update_stepper(int width,steppermotor motor, int column) {
+		char buffer[50];
+		
+		sprintf_s(buffer, "\u001b[%dm %s%d (%d) \u001b[0m ",41+column,"Stepper", column,column+1);
+		add_element(width, column, 0, buffer);
+		sprintf_s(buffer, "%7s:%4d", "ACCEL", motor.acceleration);
+		add_element(width, column, 1, buffer);
+		sprintf_s(buffer, "%7s:%4d", "TIME", motor.duration);
+		add_element(width, column, 2, buffer);
+		sprintf_s(buffer, "%7s:%4d", "ANGLE", motor.angle);
+		add_element(width, column, 3, buffer);
+}
+int set_stepper_values(steppermotor * motor, int duration, int absolute_angle ) {
+		int delta_angle = absolute_angle - motor->angle;
+
+	
+		if (delta_angle == 0) {
+			//Do not update the stepper motor values 	
+			return 0;
+		}
+		else {
+			/*Compute the discriminat to check if solution is valid*/
+			float discriminant = (pow(motor->acceleration * duration, 2) -
+				4 * motor->acceleration * abs(delta_angle));
+			/*If the discriminant is invalid compute the smallest newest duration for the stepper motor*/
+			int new_duration = new_duration = sqrt(4 * motor->acceleration *
+				abs(delta_angle)) / motor->acceleration + 1;
+			if (discriminant < 0.0) {
+			//	printf("duration is to small, should be atleast %d \n", new_duration);
+				motor->duration = new_duration;
+			}
+			else {
+				float velocity = 0.5 * (motor->acceleration * duration - sqrt(discriminant));
+				if (velocity < 1.0) {
+			//		printf("duration is to small, should be atleast %d \n", new_duration);
+					motor->duration = new_duration;
+				}
+				else {
+					motor->duration = duration;
+				}
+			}
+			motor->angle = absolute_angle;
+			return 1;
+		}
+}
+
 int main()
 {
 	/*init the terminal */
@@ -51,6 +131,7 @@ int main()
 	enable_terminal();
 	set_window_size(0, 0, width, height);
 
+	steppermotor steppers[2];
 	/*Open the comport*/
 	int status;
 	status = open_port(L"\\\\.\\COM5");
@@ -71,8 +152,8 @@ int main()
 			return 0;
 		}
 	}
-	set_timeouts();
 	flush_port();
+	set_timeouts();
 	std::cout << "Succesfully opened COM5 \n";
 	conf_port(9600, 8, 0, 0);
 	std::cout << "\n";
@@ -83,59 +164,16 @@ int main()
 
 	save_position();
 
-	/* PRINT TABlE */
-	move_xy(0, 1000);
-	for (int j = 0; j < 4; j++) {
-		for (int i = 0; i < 7; i++) {
-			printf("|%s[%dG", ESC, i * (width) / 6);
-		}
-		printf("|");
-		printf("%s[1A\r", ESC);
+	draw_table(width);
+	for (int i = 0; i < 2; i++) {
+		steppers[i].acceleration = 1; 
+		steppers[i].duration = 0; 
+		steppers[i].angle = 0; 
 	}
-	for (int i = 0; i < width; i++) {
-		printf("_");
-	}
-	printf("%s[1A\r", ESC);
-	for (int i = 0; i < 7; i++) {
-		printf("|%s[%dG", ESC, i * (width) / 6);
-	}
-	printf("|");
-	//	printf("%s[1A\r", ESC);
-
-		/* FILL LABELS */
+	update_stepper(width, steppers[0], 0);
+	update_stepper(width, steppers[1], 1);
 	last_position();
-	move_xy(0, 1000);
-	for (int i = 0; i < 6; i++) {
-		printf("%s[%dG", ESC, (i * (width) / 6) + 1);
-		printf("%8s:","Status");
-	}
-	printf("%s[1A\r", ESC);
-	for (int i = 0; i < 6; i++) {
-		printf("%s[%dG", ESC, (i * (width) / 6) + 1);
-		printf("%8s:","ANGLE");
-	}
-	printf("%s[1A\r", ESC);
-    const	char* label_names[6] = { "Accel", "Accel", "P", "P", "P", "open/closed" };
-	for (int i = 0; i < 6; i++) {
-		printf("%s[%dG", ESC, (i * (width) / 6) + 1);
-		printf("%8s:", label_names[i]);
-	}
-	printf("%s[1A\r", ESC);
-	const	char* label_names2[6] = { "Duration", "Duration", "Duration", "Duration", "Duration", "-" };
-	for (int i = 0; i < 6; i++) {
-		printf("%s[%dG", ESC, (i * (width) / 6) + 1);
-		printf("%8s:", label_names2[i]);
-	}
-	printf("%s[1A\r", ESC);
-	printf("%s[1A\r", ESC);
-	const	char* label_names3[6] = { "Stepper 1(1)", "Stepper 2(2)", "Servo 1(3)", "Servo 2(4)", "Servo 3(5)", "Endeffector(6)" };
-	for (int i = 0; i < 6; i++) {
-		printf("%s[%dG", ESC, (i * (width) / 6) + 1);
-		printf("%8s", label_names3[i]);
-	}
-	//printf("%s[1A");
-	last_position();
-
+//	return 0; 
 	/*start with a reset */ 
 	write_char('r'); 
 	while (poll_serial() == 0);
@@ -155,56 +193,62 @@ int main()
 
 	/*Start interactive terminal*/
 	char input;
-	save_position();
+	//save_position();
+
 	while (1) {
-		printf("1. Select motor:  ");
+		save_position();
+		printf("%s[2K", ESC);
+		printf("%s[1B %s[2K", ESC, ESC);
+		printf("%s[1B %s[2K", ESC, ESC);
+		printf("%s[1B %s[2K", ESC, ESC);
+	//	printf("%s[1B %s[2K", ESC, ESC);
+	//	printf("%s[1B %s[2K", ESC, ESC);
+		last_position();
+		printf("(a) reset motors | (b) rotate motor | (c) set acceleration \n ");
 		c = _getch();
-		if (c == '1' || c == '2') {
-			int index = c - 48 - 1;
-			printf("%s", label_names3[index]);
-			
-			move_xy(0, 1000);
-			//Go up 5
-			printf("%s[5A\r", ESC);
-			printf("%s[%dG", ESC, (index * (width) / 6) + 1);
-			printf("\x1b[42m%8s\x1b[0m", label_names3[index]);
-			last_position();
-			//Go down 1
-			printf("%s[1B\r", ESC);
-			printf("\n2. Enter duration: ");
-			int duration = 0; 
-			scanf_s("%d", &duration);
-			int acceleration = 0;
-			printf("3. Enter Acceleration: ");
-			scanf_s("%d", &acceleration);
-			int angle;
-			printf("4. Enter Angle:  "); 
-			scanf_s("%d", &angle); 
-
-			float discriminant = (pow(acceleration * duration, 2) - 4 * acceleration * abs(angle));
-			int new_duration = duration; 
-			if (discriminant < 0.0) {
-				new_duration = sqrt(4 * acceleration * abs(angle)) / acceleration + 1;
-				printf("duration is to small, should be atleast %d \n", new_duration);
-			}
-			else {
-				float velocity = 0.5 * (acceleration * duration - sqrt(discriminant));
-				if (velocity < 1.0) {
-					new_duration = sqrt(4 * acceleration * abs(angle)) / acceleration + 1;
-					printf("duration is to small, should be atleast %d \n", new_duration);
+		switch (c)
+		{
+		case 'a':
+			write_char('r');
+			break;
+		case 'b': 
+			printf("- Select motor: ");
+			scanf_s("%d", &c);
+			if (c == 1 || c == 2) {
+				int angle;
+				int index = c - 1;
+				printf("Set angle: ");
+				scanf_s("%d", &angle);
+				if (set_stepper_values(&steppers[index], 0, angle) == 1) {
+					char msg[10];
+					stepper_msg(msg, index,steppers[index].angle, steppers[index].duration, steppers[index].acceleration);
+					for (int i = 0; i < 10; i++) {
+						write_char(msg[i]);
+						printf("%d", msg[i]);
+					}
+					_getch();
+					update_stepper(width, steppers[index], index);
 				}
+				
+				
 			}
-			char msg[10];
-			stepper_msg(msg, index, angle, new_duration, acceleration);
-			for (int i = 0; i < 10; i++) {
-				printf("%d ", msg[i]); 
+			break;
+		case 'c':
+			int acceleration;
+			printf("- Select motor: ");
+			scanf_s("%d", &c);
+			if (c == 1 || c == 2) {
+				printf("- Set acceleration: ");
+				scanf_s("%d",&acceleration);
+				steppers[c - 1].acceleration = acceleration;
+				update_stepper(width, steppers[c - 1], c - 1);
 			}
-			write_port(msg);
-			
-
-
-
+			break;
+		default:
+			break;
 		}
+	
+		last_position();
 	}
 	close_port();
 	

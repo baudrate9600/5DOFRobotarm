@@ -58,7 +58,7 @@ public:
 protected:
 private:
 	ServoMotor( const ServoMotor &c );
-	int16_t pid();
+	int16_t pi();
 	
 
 	ServoMotor& operator=( const ServoMotor &c );

@@ -39,7 +39,7 @@ void ServoMotor::set_pid(uint16_t P, uint16_t I, uint16_t D){
 /* this function is called at fixed intervals and computes the 
  * output of the transfer function */
 /* Current implementation with floating point */
-int16_t ServoMotor::pid(){
+int16_t ServoMotor::pi(){
 	error = (target_pos -absolute_position/5.0f)*SCALER;
 	int16_t pterm;
 	int16_t iterm;
@@ -70,7 +70,7 @@ void ServoMotor::rotate(uint32_t current_time){
 	/*Update the PID at a frequency of 1khz */
 	if(current_time - old_time > 10){
 		old_time = current_time;
-		output = pid(); 
+		output = pi(); 
 	
 		/*Change direction if output is less than zero */
 	//	usart_sendln(output);
@@ -96,9 +96,9 @@ void ServoMotor::tacho(uint8_t plus, uint8_t min){
 		 * else it went backwards */
 		if(plus){
 			if(min){
-				absolute_position++;
-			}else{
 				absolute_position--;
+			}else{
+				absolute_position++;
 			}
 			tacho_state=1; 
 		}

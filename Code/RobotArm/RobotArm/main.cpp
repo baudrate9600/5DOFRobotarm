@@ -46,7 +46,10 @@ shift register
 #define SERVO0		(1 << PORTD2)
 #define SERVO0_DIRA (1 << 2)
 #define SERVO0_DIRB (1 << 3) 
+#define SERVO0_TACHO_PLUS (1 << PORTC0)
+#define SERVO0_TACHO_MIN  (1 << PORTC1)
 #define SERVO0_PWM	OCR0B
+
 #define SERVO1_DIRA (1 << 4) 
 #define SERVO1_DIRB (1 << 5) 
 #define SERVO2_DIRA (1 << 6) 
@@ -155,6 +158,8 @@ int main(void)
 	DDRD |= SERVO0;
 	TCCR0A |= (1 << COM0B0) | (1 << WGM01) | (1 << WGM00); 
 	TCCR0B |= (1 << CS02); 
+	ServoMotor servo0(&SERVO0_PWM,&direction_signal.direction,SERVO0_DIRA,SERVO0_DIRB);
+	servo0.set_pid(10,1,0);
 	/* Servo 1 */ 
 	TCCR0A |= (1 << COM0A0) | (1 << WGM01) | (1 << WGM00); 
 	/* Servo 2 */
@@ -167,48 +172,77 @@ int main(void)
 	/* Clear shift register */
 	direction_signal.direction = 0;
 	direction_signal.previous_direction = 0; 	
-	direction_signal.direction |= SERVO0_DIRA;
+//	direction_signal.direction |= SERVO0_DIRA;
 	spi_send_direction();	
-	SERVO0_PWM = 40;
+//	SERVO0_PWM = 40;
 
 	usart_enable(9600);
 	timer_enable();
 	sei();
 	/* Wait until the reset command is sent */
-	while(wakeup == 0);
+	servo0.target_pos = 45;
+	uint32_t oldtime=0;
+	uint8_t capture_tacho;
 	while (1){
 		if(motor_status.done == 1){
 			stepper0.reset();
 			stepper1.reset();
+			servo0.reset();
 			motor_status.done = 0; 
 		} else if (motor_status.done == 2)
 		{
 			motor_status.done = 0; 
-			uint16_t duration = motor_status.data[0]*10 + motor_status.data[1];
-			uint16_t acceleration = motor_status.data[2]*10 + motor_status.data[3];
-			int16_t angle = motor_status.data[5]*100 + motor_status.data[6]*10 + motor_status.data[7];
-			if(motor_status.data[4] == '-'){
-				angle = angle * -1;
+			/*Stepper motor */	
+			if(motor_status.motor_select < 2){
+				uint16_t duration = motor_status.data[0]*10 + motor_status.data[1];
+				uint16_t acceleration = motor_status.data[2]*10 + motor_status.data[3];
+				int16_t angle = motor_status.data[5]*100 + motor_status.data[6]*10 + motor_status.data[7];
+				if(motor_status.data[4] == '-'){
+					angle = angle * -1;
+				}	
+				switch (motor_status.motor_select)
+				{
+					case 0 :
+						stepper0.target_pos = angle; 
+						stepper0.duration = duration;
+						stepper0.acceleration = acceleration;
+						stepper0.start = 1; 
+						break; 
+					case 1 : 
+						stepper1.target_pos = angle;
+						stepper1.duration = duration;
+						stepper1.acceleration = acceleration;
+						stepper1.start	= 1;
+						break;
+				}	
+			}else if(motor_status.motor_select >=2 || motor_status.motor_select < 6){
+					int16_t angle = motor_status.data[5]*100 + motor_status.data[6]*10 + motor_status.data[7];
+					int16_t pwm = motor_status.data[1]*100 + motor_status.data[2]*10 + motor_status.data[3];
+					if(motor_status.data[4] == '-'){
+					angle = angle * -1;
+				    }
+					servo0.target_pos = angle; 
 			}
-			switch (motor_status.motor_select)
-			{
-				case 0 :
-					stepper0.target_pos = angle; 
-					stepper0.duration = duration;
-					stepper0.acceleration = acceleration;
-					stepper0.start = 1; 
-					break; 
-				case 1 : 
-					stepper1.target_pos = angle;
-					stepper1.duration = duration;
-					stepper1.acceleration = acceleration;
-					stepper1.start	= 1;
-					break;
-			}
+
+			
 			
 		}
 		stepper0.rotate(timer_10k());
 		stepper1.rotate(timer_10k());
+		servo0.rotate(timer_10k());
+		
+		capture_tacho = PINC;
+		servo0.tacho(capture_tacho & SERVO0_TACHO_PLUS,capture_tacho & SERVO0_TACHO_MIN);
+		
+		
+		if(direction_signal.previous_direction != direction_signal.direction){
+			spi_send_direction();
+			direction_signal.previous_direction = direction_signal.direction;
+		}
+		if(timer_10k() - oldtime > 100){
+			oldtime= timer_10k();
+			usart_sendln(servo0.absolute_position);	
+		}	
 //		usart_sendln(timer_10k());
 	}
 }

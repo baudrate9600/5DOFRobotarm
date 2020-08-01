@@ -43,6 +43,39 @@ void stepper_msg(char* buffer, int motor_select, int angle, int duration, int ac
 	buffer[7] = angle % 10;
 	angle /= 10; 
 }
+void servo_msg(char* buffer,int motor_select, int pwm, int angle,int lock) {
+	buffer[0] = 'm';
+	buffer[1] = motor_select;
+
+	buffer[2] = lock;
+	buffer[5] = pwm %10;
+	angle /= 10;
+	buffer[4] = pwm % 10; 
+	angle /= 10; 
+	buffer[3] = pwm % 10;
+	char sign = angle > 0 ? '+' : '-';
+	angle = abs(angle);
+	buffer[6] = sign;
+	buffer[9] = angle %10;
+	angle /= 10;
+	buffer[8] = angle % 10; 
+	angle /= 10; 
+	buffer[7] = angle % 10;
+
+		//Angle 
+	char sign = angle > 0 ? '+' : '-';
+	angle = abs(angle);
+	buffer[6] = sign;
+	buffer[9] = angle %10;
+	angle /= 10;
+	buffer[8] = angle % 10; 
+	angle /= 10; 
+	buffer[7] = angle % 10;
+	angle /= 10; 
+
+}
+
+void servo_msg()
 #define NUM_ROWS 4 
 #define NUM_COLUMNS 6
 

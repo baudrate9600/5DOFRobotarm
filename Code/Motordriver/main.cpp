@@ -82,12 +82,7 @@ Motor_status motor_status;
  * the data. Both are asynchronous, lastly when a newline is encountered the new command flag is set
  */
 
-struct{
-	volatile char data_input[MAX_BUFFER];
-	volatile char data_ouput[MAX_BUFFER];
-	volatile bool new_command;	
-	volatile uint8_t byte_count;
-}uart_io_t;
+
 
 uart_io_t g_uart_io = {.new_command = false, .data_count = 0};
 

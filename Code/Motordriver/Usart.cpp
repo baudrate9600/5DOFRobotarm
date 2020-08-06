@@ -12,11 +12,6 @@
 #include <stdlib.h>
 
 
- char usart_buffer[USART_BUFFER_SIZE];
- char usart_received_byte;
-volatile uint8_t usart_buffer_counter = 0; 
-volatile uint8_t fifo_counter = 0;
-bool usart_interrupt = false; 
 
 void usart_enable(uint16_t baudrate){
 	UCSR0B = (1 << TXEN0) | (1 << RXEN0) | (1 << RXCIE0); // Enable the USART Transmitter and  receive interrupt
@@ -35,17 +30,6 @@ char usart_recieve(){
 	return  c; 
 		
 }
-
-
-//Block the RX interrupt
-void usart_block(){
-	UCSR0B &= ~(1 << RXCIE0 ); //turn off interrupts  
-}
-//Unblock the RX interrupt 
-void usart_unblock(){
-	UCSR0B |= (1 << RXCIE0 ); //turn on interrupts  
-}
-
 
 void usart_newline(){
 	usart_send('\n');	

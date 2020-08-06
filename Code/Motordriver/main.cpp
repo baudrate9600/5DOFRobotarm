@@ -70,41 +70,43 @@ shift register
 /* UART defines */
 #define MAX_BUFFER 16
 
-
-
-
-/* States of the receive FSM 
- * */
-typedef enum  {
-				RECEIVE_WAIT ,
-				RECEIVE_MOTOR_SELECT,
-				RECEIVE_DATA,
-				RECEIVE_RESET,
-				RECEIVE_DONE 
-				}receiver_fsm;	
-receiver_fsm receive_state = RECEIVE_WAIT ;
-
-//int parse_data[16] = 0; 
 struct Motor_status{
 	uint8_t motor_select; 
 	int data[8];
 	int done;
 	};
 Motor_status motor_status; 
-/*Handle the commands */
-volatile  char data_rx[MAX_BUFFER];
-volatile uint8_t rx_count;
-volatile bool new_command = false;
-/* Receive all the data until a newline is found */
+
+/* This structure handles the IO between the motor driver and the host 
+ * The data input is the received string, the data output is the buffer to 
+ * the data. Both are asynchronous, lastly when a newline is encountered the new command flag is set
+ */
+
+struct{
+	volatile char data_input[MAX_BUFFER];
+	volatile char data_ouput[MAX_BUFFER];
+	volatile bool new_command;	
+	volatile uint8_t byte_count;
+}uart_io_t;
+
+uart_io_t g_uart_io = {.new_command = false, .data_count = 0};
+
+/* Asynchronous block that handles the commands sent from the host 
+ * When a newline is found it is asserted that the command has been sent 
+ * NOTE: It is important that the host never sends more than the max buffer size 
+ *       because the motor driver does not check for out of bounds 
+ */
 ISR(USART_RX_vect){
-	data_rx[rx_count] = UDR0;
-	if(data_rx[rx_count] == '\n'){
-		rx_count = 0; 
-		new_command = true;
+	g_uart_io.data_input[ g_uart_io.byte_count ] = UDR0;
+	
+	if( g_uart_io.data_input[ g_uart_io.byte_count ]== '\n'){
+		g_uart_io.byte_count = 0; 
+		g_uart_io.new_command = true;
 	}else{
-		rx_count++;
+		g_uart_io.byte_count = g_uart_io.byte_count + 1 ; 
 	}
 }
+
 
 /*Struct to keep the current state of the directions and the previous, this is used so that the 
  * shift register only has to be updated if direction_vector XOR previous_direction > 0 */
@@ -188,9 +190,9 @@ int main(void)
 		/*Read the command and assert that new commands can be read */
 		if(new_command == true){
 			ATOMIC_BLOCK(ATOMIC_FORCEON){
-				memcpy(command,(void*)data_rx,MAX_BUFFER);
+				memcpy(command,(void*)data_input,MAX_BUFFER);
 			}
-			rx_count = 0; 
+			byte_count = 0; 
 			new_command = false; 
 			switch (command[0])
 			{

@@ -25,6 +25,8 @@ shift register
 #include <avr/delay.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <util/atomic.h>
+#include <string.h>
 #include <math.h>
 #include "Usart.h"
 #include "timer.h"
@@ -65,6 +67,8 @@ shift register
 
 
 
+/* UART defines */
+#define MAX_BUFFER 16
 
 
 
@@ -87,41 +91,19 @@ struct Motor_status{
 	int done;
 	};
 Motor_status motor_status; 
-volatile int wakeup;
+/*Handle the commands */
+volatile  char data_rx[MAX_BUFFER];
+volatile uint8_t rx_count;
+volatile bool new_command = false;
+/* Receive all the data until a newline is found */
 ISR(USART_RX_vect){
-	motor_status.done = 0; 
-	char c = UDR0;
-	static int counter = 0; 
-	static int sign;
-	/*finite state machine for receiving data frame */
-	switch(receive_state){
-				case RECEIVE_WAIT : 
-					if(c == 'm'){
-						receive_state = RECEIVE_MOTOR_SELECT;
-					}else if(c== 'r'){
-						UDR0 = 'k';
-						receive_state = RECEIVE_WAIT;
-						motor_status.done = 1;
-						wakeup = 1;
-					}
-					break;
-				case RECEIVE_MOTOR_SELECT: 
-					motor_status.motor_select = c; 
-					receive_state = RECEIVE_DATA;
-					counter = 0;
-					break; 
-				case RECEIVE_DATA:
-					motor_status.data[counter] = c;
-					counter++;
-					if(counter == 8){
-						receive_state = RECEIVE_WAIT ; 
-						motor_status.done = 2;
-						UDR0 = 'k';
-					}
-					
-				
-					break; 
-		}	
+	data_rx[rx_count] = UDR0;
+	if(data_rx[rx_count] == '\n'){
+		rx_count = 0; 
+		new_command = true;
+	}else{
+		rx_count++;
+	}
 }
 
 /*Struct to keep the current state of the directions and the previous, this is used so that the 
@@ -144,13 +126,9 @@ void spi_send_direction(){
 	while(!(SPSR & (1<<SPIF)));
 	SHIFT_PORT |= SHIFT_REFRESH;
 }
-int main(void)
-{
-	wakeup = 0;
-	/* Initialize SPI:	
-	 *	the SPI is used to send the direction signals to the shift register */
-	 spi_init();
-	/* Initialize motors: 
+
+void init_motors(){
+		/* Initialize motors: 
 	/* End effector */
 	TCCR1A |= (1 << COM1B1) | (1 << WGM11) | (1 << WGM10); //Enable 0C2B pin as pwm and 
 	TCCR1B |= (1 << CS12); //PWM frequency of 62,500 hz 
@@ -158,8 +136,6 @@ int main(void)
 	DDRD |= SERVO0;
 	TCCR0A |= (1 << COM0B0) | (1 << WGM01) | (1 << WGM00); 
 	TCCR0B |= (1 << CS02); 
-	ServoMotor servo0(&SERVO0_PWM,&direction_signal.direction,SERVO0_DIRA,SERVO0_DIRB);
-	servo0.set_pid(10,1,0);
 	/* Servo 1 */ 
 	TCCR0A |= (1 << COM0A0) | (1 << WGM01) | (1 << WGM00); 
 	/* Servo 2 */
@@ -167,69 +143,76 @@ int main(void)
 	
 	/*Stepper motor */
 	DDRD |= (STEPPER0_DIR) | (STEPPER0_STEP ) | (STEPPER1_DIR) | (STEPPER1_STEP);  
-	StepperMotor stepper0(0,0.2571426,STEPPER0_DIR,STEPPER0_STEP);
-	StepperMotor stepper1(0,0.043182,STEPPER1_DIR,STEPPER1_STEP);
+
+}
+void process_stepper_command(char * command,StepperMotor * stepperMotor){
+	char * ptr = &command[2]; 
+	switch (command[1])
+	{
+		case 'a':
+			stepperMotor->acceleration = atoi(ptr);
+			usart_sendln(stepperMotor->acceleration); 
+			break;
+		default:
+		/* Your code here */
+		break;
+	}	
+}
+int main(void)
+{
+	/* Initialize SPI:	*/
+	 spi_init();
+	
+	/* Init motors */	
+	init_motors();
+	ServoMotor servo0(&SERVO0_PWM,&direction_signal.direction,SERVO0_DIRA,SERVO0_DIRB);
+	servo0.set_pid(1,1,0);
+
+	StepperMotor stepper_motors[2] = { StepperMotor(0,0.2571426,STEPPER0_DIR,STEPPER0_STEP),
+									   StepperMotor(0,0.043182,STEPPER1_DIR,STEPPER1_STEP) };
+
 	/* Clear shift register */
-	direction_signal.direction = 0;
+	direction_signal.direction = SERVO0_DIRB;
 	direction_signal.previous_direction = 0; 	
-//	direction_signal.direction |= SERVO0_DIRA;
 	spi_send_direction();	
-//	SERVO0_PWM = 40;
 
 	usart_enable(9600);
 	timer_enable();
 	sei();
-	/* Wait until the reset command is sent */
-	servo0.target_pos = 45;
+
 	uint32_t oldtime=0;
 	uint8_t capture_tacho;
-	while (1){
-		if(motor_status.done == 1){
-			stepper0.reset();
-			stepper1.reset();
-			servo0.reset();
-			motor_status.done = 0; 
-		} else if (motor_status.done == 2)
-		{
-			motor_status.done = 0; 
-			/*Stepper motor */	
-			if(motor_status.motor_select < 2){
-				uint16_t duration = motor_status.data[0]*10 + motor_status.data[1];
-				uint16_t acceleration = motor_status.data[2]*10 + motor_status.data[3];
-				int16_t angle = motor_status.data[5]*100 + motor_status.data[6]*10 + motor_status.data[7];
-				if(motor_status.data[4] == '-'){
-					angle = angle * -1;
-				}	
-				switch (motor_status.motor_select)
-				{
-					case 0 :
-						stepper0.target_pos = angle; 
-						stepper0.duration = duration;
-						stepper0.acceleration = acceleration;
-						stepper0.start = 1; 
-						break; 
-					case 1 : 
-						stepper1.target_pos = angle;
-						stepper1.duration = duration;
-						stepper1.acceleration = acceleration;
-						stepper1.start	= 1;
-						break;
-				}	
-			}else if(motor_status.motor_select >=2 || motor_status.motor_select < 6){
-					int16_t angle = motor_status.data[5]*100 + motor_status.data[6]*10 + motor_status.data[7];
-					int16_t pwm = motor_status.data[1]*100 + motor_status.data[2]*10 + motor_status.data[3];
-					if(motor_status.data[4] == '-'){
-					angle = angle * -1;
-				    }
-					servo0.target_pos = angle; 
-			}
+    char command[MAX_BUFFER];
 
-			
-			
+	while (1){
+		/*Read the command and assert that new commands can be read */
+		if(new_command == true){
+			ATOMIC_BLOCK(ATOMIC_FORCEON){
+				memcpy(command,(void*)data_rx,MAX_BUFFER);
+			}
+			rx_count = 0; 
+			new_command = false; 
+			switch (command[0])
+			{
+				//s(T)epper motor 
+				case 'T':
+					process_stepper_command(command,&stepper_motors[0]);					
+					break;
+				case 'a':
+					break;
+				case 'd':
+					break;
+				
+				break;
+			}
 		}
-		stepper0.rotate(timer_10k());
-		stepper1.rotate(timer_10k());
-		servo0.rotate(timer_10k());
+			
+			
+		
+	
+			
+			
+	//	servo0.rotate(timer_10k());
 		
 		capture_tacho = PINC;
 		servo0.tacho(capture_tacho & SERVO0_TACHO_PLUS,capture_tacho & SERVO0_TACHO_MIN);
@@ -241,9 +224,7 @@ int main(void)
 		}
 		if(timer_10k() - oldtime > 100){
 			oldtime= timer_10k();
-			usart_sendln(servo0.absolute_position);	
 		}	
-//		usart_sendln(timer_10k());
 	}
 }
 

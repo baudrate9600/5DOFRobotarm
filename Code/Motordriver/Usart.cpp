@@ -10,7 +10,7 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <stdlib.h>
-
+#define F_CPU 16000000UL
 
 
 void usart_enable(uint16_t baudrate){

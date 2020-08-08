@@ -11,7 +11,12 @@
 
 #include <avr/io.h> 
 #define MAX_BUFFER 32 
-struct{
+
+/* This structure handles the IO between the motor driver and the host 
+ * The data input is the received string, the data output is the buffer to 
+ * the data. Both are asynchronous, lastly when a newline is encountered the new command flag is set
+ */
+typedef struct{
 	volatile char data_input[MAX_BUFFER];
 	volatile char data_ouput[MAX_BUFFER];
 	volatile bool new_command;	

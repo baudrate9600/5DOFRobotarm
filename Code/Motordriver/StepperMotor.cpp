@@ -51,7 +51,7 @@ int StepperMotor::rotate(uint32_t current_time){
 		}
 
 		/* Compute parameters */
-		num_steps = angle*step_to_angle;
+	//	num_steps = angle*step_to_angle;
 		uint16_t vmax= 0.5*(acceleration*duration-sqrt(pow(acceleration*duration,2)-(angle*acceleration*4)));
 		t0=(pow(vmax,2)*num_steps)/(2*angle*acceleration);
 		t1 =num_steps-t0;

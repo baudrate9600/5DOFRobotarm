@@ -40,9 +40,18 @@ shift register
 /* Global variables */
 uart_io_t g_uart_io;			
 uint8_t   g_direction_register;	// 8 bit vector sent into the shift register containing the directions 
-
+StepperMotor g_stepper_motors[2] = {
+									StepperMotor(0,0.2571426,STEPPER0_DIR,STEPPER0_STEP),
+									StepperMotor(0,0.043182,STEPPER1_DIR,STEPPER1_STEP) 
+									};
+ServoMotor   g_servo_motors[3]   = {
+								  ServoMotor(&SERVO0_PWM,&g_direction_register,SERVO0_DIRA,SERVO0_DIRB),
+								  ServoMotor(&SERVO1_PWM,&g_direction_register,SERVO1_DIRA,SERVO1_DIRB),
+								  ServoMotor(&SERVO2_PWM,&g_direction_register,SERVO2_DIRA,SERVO2_DIRB)
+								  };
 /* f = 1 / T * 10^-6 *100 [hz] */
-#define PID_SAMPLE_PERIOD_100Xus 100
+#define PID_SAMPLE_PERIOD_100Hz 100
+#define VELOCITY_SAMPLE_PERIOD_10HZ 1000
 
 /* Asynchronous block that handles the commands sent from the host 
  * When a newline is found it is asserted that the command has been sent 
@@ -96,26 +105,55 @@ void init_motors(){
 	TCCR0A |= (1 << COM0B1) | (1 << WGM01) | (1 << WGM00); 
 	TCCR0B |= (1 << CS02); 
 	/* Servo 1 */ 
-	TCCR0A |= (1 << COM0A0); 
+	TCCR0A |= (1 << COM0A1); 
 	DDRD |= SERVO1;
 	
 	/* Servo 2 */
 	TCCR1A |= (1 << COM1A1) | (1 << WGM12) | (1 << WGM10); 
-	TCCR0B |= (1 << CS12);
+	TCCR1B |= (1 << CS12);
 	DDRB |= SERVO2;
 	
 	/*Stepper motor */
 	DDRD |= (STEPPER0_DIR) | (STEPPER0_STEP ) | (STEPPER1_DIR) | (STEPPER1_STEP);  
-
+	
+	
+	float Kp[3]	= {2,5,5};
+	float Ki[3] = {0,0,0};
+	float Kd[3] = {0.1,0.1,0.1};
+	float Ki_saturation = 255;
+	float Vi_saturation = 10;  
+	float Vp[3] = {2,2,2};
+	float Vi[3] = {0.1,0.1,0.1};
+	
+	for(int i = 0; i < 3; i++){
+		g_servo_motors[i].Kp = Kp[i];
+		g_servo_motors[i].Ki = Ki[i];
+		g_servo_motors[i].Ki_saturation = Ki_saturation; 
+		g_servo_motors[i].Kd = Kd[i]; 
+		g_servo_motors[i].Vp = Vp[i]; 
+		g_servo_motors[i].Vi = Vi[i];
+		g_servo_motors[i].Vi_saturation = Vi_saturation;
+		g_servo_motors[i].set_point_velocity = 0; 
+		g_servo_motors[i].set_point_position = 0; 
+	}	
+	
 }
 void process_stepper_command(char * command,StepperMotor * stepperMotor){
-	char * ptr = &command[2]; 
-	switch (command[1])
+	char * ptr = &command[3]; 
+	switch (command[2])
 	{
-		case 'a':
+		case 'A':
 			stepperMotor->acceleration = atoi(ptr);
-			usart_sendln(stepperMotor->acceleration); 
 			break;
+		case 'P':
+			stepperMotor->num_steps = atoi(ptr); 
+			break;
+		case 'T':
+			stepperMotor->duration = atoi(ptr);
+			break; 
+		case 'S':
+			stepperMotor->target_pos = atoi(ptr);
+			break; 	
 		default:
 		/* Your code here */
 		break;
@@ -124,27 +162,50 @@ void process_stepper_command(char * command,StepperMotor * stepperMotor){
 void process_servo_command(char * command, ServoMotor * servoMotor){
 	char * ptr = &command[3]; 
 	switch(command[2]){
-		case 's':
-			servoMotor->set_point = atoi(ptr);
-			usart_sendln(servoMotor->set_point);	
+		case 'S':
+			servoMotor->set_point_position = atoi(ptr);
+			
 		break; 
-		case 'p':
-			servoMotor->Kp = atoi(ptr)/1000.0;
-		break; 
-		case 'i':
-			servoMotor->Ki = atoi(ptr)/1000.0; 
-		break; 
-		case 'd': 
-			servoMotor->Kd = atoi(ptr)/1000.0;
+		//GO
+		case 'G':
+			servoMotor->start=1;
 		break;
-		case 'm':
-			servoMotor->max_pwm = atoi(ptr);
+		case 'V':
+			servoMotor->speed_val = atoi(ptr);
 		break;
+		case 'P':
+			servoMotor->new_position = atoi(ptr);
+		break;
+		//Tune the PID of the position and velocity; 
+		case 'T':
+			switch (command[2])
+			{
+				ptr++;
+				case 'p':
+					servoMotor->Kp = atoi(ptr)/1000.0;
+				break; 
+				case 'i':
+					servoMotor->Ki = atoi(ptr)/1000.0; 
+				break; 
+				case 'd': 
+					servoMotor->Kd = atoi(ptr)/1000.0;
+				break;
+				case 'm':
+					servoMotor->max_pwm = atoi(ptr);
+				break;
+				case 'x':
+					servoMotor->Vp = atoi(ptr)/1000.0;
+				break;
+				case 'y':
+					servoMotor->Vi = atoi(ptr)/1000.0; 
+				break;
+			}
 		case 'r': 
 			servoMotor->reset(); 
 		break; 
 	}
 }
+
 int main(void)
 {
 	spi_init();
@@ -152,28 +213,15 @@ int main(void)
 	
 	usart_enable(9600);
 	timer_enable();
-	init_motors();
+	//while(1);
+	
+	for(int i = 0; i < 3; i++){
+		g_servo_motors[i].reset();
+	}
 	sei();
 
-	StepperMotor stepper_motors[2] = {StepperMotor(0,0.2571426,STEPPER0_DIR,STEPPER0_STEP),
-									  StepperMotor(0,0.043182,STEPPER1_DIR,STEPPER1_STEP) };
-	ServoMotor   servo_motors[3]   = {
-									  ServoMotor(&SERVO0_PWM,&g_direction_register,SERVO0_DIRA,SERVO0_DIRB),
-		                              ServoMotor(&SERVO1_PWM,&g_direction_register,SERVO1_DIRA,SERVO1_DIRB),
-									  ServoMotor(&SERVO2_PWM,&g_direction_register,SERVO2_DIRA,SERVO2_DIRB)
-									  };
-	//Obtained by tuning, critcally damped
-	servo_motors[0].set_pid_paramters(0.2,0,1);
-	servo_motors[0].Ki_saturation = 255; 
-	servo_motors[0].max_pwm = 255;
-	
-	servo_motors[1].set_pid_paramters(10,0,1);
-	servo_motors[1].Ki_saturation = 255; 
-	servo_motors[1].max_pwm = 255;
-	
-	servo_motors[2].set_pid_paramters(10,0,1);
-	servo_motors[2].Ki_saturation = 255; 
-	servo_motors[2].max_pwm = 255;
+
+
 
 
 	g_uart_io.new_command = false; 
@@ -183,20 +231,15 @@ int main(void)
 	uint32_t pid_sample_time=0;
 	uint8_t encoder_positions = 0;
 
+	uint32_t velocity_sample_time = 0; 
+	
 	/* Variables used to process the command sent from the host */
     char host_command[MAX_BUFFER];
 	int  motor_selection;
-
-	bool isSending = false; 
-	char data_out[10];
-	uint8_t data_counter = 0;
-	_delay_ms(100);
-	
-	g_direction_register = SERVO1_DIRA;
-	spi_shift_in_direction();
-	SERVO1_PWM = 100;
+	init_motors();
 	while (1){
 		/*Read the command and assert that new commands can be read */
+		//////////////////////////////////////////////////////////////////////////
 		if(g_uart_io.new_command == true){
 			ATOMIC_BLOCK(ATOMIC_FORCEON){
 				memcpy(host_command,(void*)g_uart_io.data_input,MAX_BUFFER);
@@ -207,11 +250,11 @@ int main(void)
 			{
 				case 'T':
 					motor_selection = host_command[1] - 48;
-					process_stepper_command(host_command,&stepper_motors[0]);					
+					process_stepper_command(host_command,&g_stepper_motors[0]);					
 					break;
 				case 'S':
 					motor_selection = host_command[1] - 48;
-					process_servo_command(host_command,&servo_motors[motor_selection]);
+					process_servo_command(host_command,&g_servo_motors[motor_selection]);
 					break;
 				case 'd':
 					break;
@@ -219,45 +262,29 @@ int main(void)
 				break;
 			}
 		}
+		//////////////////////////////////////////////////////////////////////////
 		
-		if(timer_10k() - pid_sample_time > PID_SAMPLE_PERIOD_100Xus){
-			pid_sample_time= timer_10k();
-			servo_motors[0].rotate();
-			servo_motors[1].rotate();
-			servo_motors[2].rotate();
-		}	
+		
+		
+		g_servo_motors[0].move(timer_10k());	
+		g_servo_motors[1].move(timer_10k());
+		
 		spi_shift_in_direction(); 
 		
 		if(PINC != encoder_positions){
-			encoder_positions = PINC;
-			servo_motors[0].update_encoder_position(encoder_positions& SERVO0_ENCODER_PLUS,
-			                                    encoder_positions & SERVO0_ENCODER_MIN);
-			servo_motors[1].update_encoder_position(encoder_positions& SERVO1_ENCODER_PLUS,
-			                                    encoder_positions & SERVO1_ENCODER_MIN);
-			servo_motors[2].update_encoder_position(encoder_positions& SERVO2_ENCODER_PLUS,
-			                                    encoder_positions & SERVO2_ENCODER_MIN);
 
+			encoder_positions = PINC;
+			
+			g_servo_motors[0].update_encoder_position(encoder_positions& SERVO0_ENCODER_PLUS,
+			                                    encoder_positions & SERVO0_ENCODER_MIN);
+			g_servo_motors[1].update_encoder_position(encoder_positions& SERVO1_ENCODER_PLUS,
+			                                    encoder_positions & SERVO1_ENCODER_MIN);
+			g_servo_motors[2].update_encoder_position(encoder_positions& SERVO2_ENCODER_PLUS,
+			                                    encoder_positions & SERVO2_ENCODER_MIN);
 		}
-		if (isSending == false){
-			 
-			 itoa((int)servo_motors[1].encoder_position,data_out,10);
-			 data_counter = 0; 
-			 if(abs(servo_motors[1].error) > 2){
-				isSending =true;
-			 }
-		}else{
-			if ((UCSR0A & (1 << UDRE0))){
-				char c =data_out[data_counter];
-				if(c == '\0'){
-					isSending = false; 
-				//	UDR0 = '\n';
-				} else{
-					//UDR0 = c;
-					data_counter++;
-				}
-				
-			}	
-		}
+
+		
+		
 		
 	}
 }

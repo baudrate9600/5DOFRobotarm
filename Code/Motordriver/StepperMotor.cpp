@@ -36,22 +36,25 @@ StepperMotor::StepperMotor(int16_t current_pos, float step_to_angle, uint8_t dir
 
 
 int StepperMotor::rotate(uint32_t current_time){
+	
 	if(start == 1){
+		done = false;
 		state = S_ACCEL;
-		int16_t angle=(target_pos - current_pos);
-		current_pos = target_pos;
+		int16_t angle=num_steps/step_to_angle;
 		if(angle> 0){
 			STEPPER_REGISTER |= dir_pin; 
 		}else if(angle <0){
 			STEPPER_REGISTER &= ~dir_pin; 
 			angle = angle * -1;
+			num_steps = num_steps * -1;
 		}else if(angle == 0){
 			state = S_WAIT;
 			start = 0; 
+			done = true;
+			//usart_sendln("certified bruh moment");
 		}
 
 		/* Compute parameters */
-		num_steps = angle*step_to_angle;
 		uint16_t vmax= 0.5*(acceleration*duration-sqrt(pow(acceleration*duration,2)-(angle*acceleration*4)));
 		t0=(pow(vmax,2)*num_steps)/(2*angle*acceleration);
 		t1 =num_steps-t0;
@@ -77,8 +80,11 @@ int StepperMotor::rotate(uint32_t current_time){
 		usart_sendln("####################"); 		
 		#endif // DEBUG
 		stepper_time = current_time; 
+		//usart_sendln(done);
 	}else if(start == 2){
 		fsm(current_time); 
+	}else{
+		done = true;
 	}
 
 }
@@ -125,16 +131,23 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 						usart_send("S_DECEL ");
 						usart_sendln(pulse_width);
 					#endif
+					done = true;
 				}
 				pulse_width_counter ++;
 				break;
 		}	
 		step_counter++; 
+		if(pulse_width < 10){
+			pulse_width = 10;
+		}
 	}
 	
 	STEPPER_REGISTER &= ~step_pin;
 	
 	return state;
+}
+bool StepperMotor::is_done(){
+	return done;
 }
 void StepperMotor::reset(){
 	current_pos = 0; 

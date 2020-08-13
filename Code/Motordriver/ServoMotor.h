@@ -9,58 +9,65 @@
 #ifndef __SERVOMOTOR_H__
 #define __SERVOMOTOR_H__
 #include <avr/io.h>
-
+typedef enum  {    SE_WAIT,
+				   SE_ACCEL,
+				   SE_CONSTANT,
+				   SE_DECEL
+				   }
+				   servo_fsm;
 class ServoMotor
 {
-//variables
 public:
-uint16_t P_factor;
-uint16_t I_factor; 
-uint16_t D_factor;
-int32_t summation;
-int32_t max_summation;
-int32_t max_error; 
-int32_t target_pos;
-int32_t absolute_position; 
-int32_t derivative_term;
-int32_t integral_term;
-int32_t error; 
+
+/* PID variables */
+float Kp,Ki,Kd;
+int16_t set_point_position;
+float Vp,Vi,Vd;
+int16_t set_point_velocity;
+
+int16_t encoder_position;
+int16_t encoder_velocity;
+int16_t speed_val;
+int16_t Kp_error, Ki_error , Kd_error,error; 
+int16_t Vp_error, Vi_error , Vd_error;
+int16_t velocity_error; 
+int16_t max_pwm;
+float Ki_saturation; 
+float Vi_saturation;
+
+int16_t start; 
+uint32_t last_time;
+uint32_t last_velocity_time;
+int16_t new_position  ;
+servo_fsm STATE;
 protected:
 private:
-
-/*PID paramaters */
-
-
-
-
-
-
-float old_error; 
-
-
-
-uint32_t old_time;
+/* Variables which interface the avr output pins to the PID controller */
 volatile uint8_t * servo_register;
 volatile uint8_t * servo_pwm;
-
-uint8_t tacho_state; 
-
 uint8_t dir_a,dir_b;
-//functions
+
+/* Stays high until the falling edge of the encoder signal */ 
+uint8_t encoder_rising_edge ; 
+
+bool done;
 public:
 	ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register ,uint8_t dir_a,uint8_t dir_b);
+	ServoMotor( const ServoMotor &c );
 	void reset();
-	void set_pid(uint16_t P, uint16_t I, uint16_t D);
-	void tacho(uint8_t plus,uint8_t min);
-	void rotate(uint32_t current_time);
+	void set_pid_paramters(float P, float I, float D);
+	void update_encoder_position(uint8_t plus,uint8_t min);
+	void update_encoder_velocity();
+	void move(uint32_t current_time);
+	void rotate();
+	void speed(); 
 	void reset_summation();
+	bool is_done();
 	~ServoMotor();
 protected:
 private:
-	ServoMotor( const ServoMotor &c );
-	int16_t pi();
-	
-
+	float pid_position();
+	float pid_velocity();
 	ServoMotor& operator=( const ServoMotor &c );
 
 }; //ServoMotor

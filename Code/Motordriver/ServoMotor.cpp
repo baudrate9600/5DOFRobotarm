@@ -5,75 +5,76 @@
 * Author: sojim
 */
 
-
+/************************************************************************/
+/* PID FLOAT IMPLEMENTATION                                             */
+/************************************************************************/
 #include "ServoMotor.h"
 #include "Usart.h"
 #include <avr/io.h>	
-// default constructor
-#define MAX_INT 100
-#define MAX_SUMMATION 5
-#define SCALER 1L
-ServoMotor::ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register ,uint8_t dir_a,uint8_t dir_b)
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+
+extern int16_t g_delta_time_encoder;
+ServoMotor::ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register_ ,uint8_t dir_a_,uint8_t dir_b_)
 {
-	this->tacho_state = 0;
-	this->target_pos = 0; 
-	this->integral_term = 0; 
-	this->old_error = 0; 
-	this->dir_a = dir_a;
-	this->dir_b = dir_b;
-	this->servo_register = servo_register;
-	this->servo_pwm = pwm; 
-	summation = 0; 
-	
-
+	servo_pwm = pwm; 
+	servo_register = servo_register_;	
+	dir_a = dir_a_;
+	dir_b = dir_b_;
+	max_pwm = 255; 
+	STATE = SE_WAIT;
 } //ServoMotor
-void ServoMotor::set_pid(uint16_t P, uint16_t I, uint16_t D){
-	P_factor = P;
-	I_factor = I; 
-	D_factor = D; 
-	
-	max_error = MAX_INT / (P_factor + 1)*SCALER;
-	max_summation = MAX_SUMMATION /(I_factor +1)*SCALER; 
+
+void ServoMotor::set_pid_paramters(float Kp_, float Ki_, float Kd_){
+	Kp = Kp_;
+	Ki= Ki_; 
+	Kd = Kd_; 	
 }
 
-/* this function is called at fixed intervals and computes the 
- * output of the transfer function */
-/* Current implementation with floating point */
-int16_t ServoMotor::pi(){
-	error = (target_pos -absolute_position/5.0f)*SCALER;
-	int16_t pterm;
-	int16_t iterm;
-	int32_t temp;
-	
-	if(error > max_error){
-		pterm = MAX_INT;
-	}else if(error < -max_error){
-		pterm = -MAX_INT;	
-	}else{
-		pterm = P_factor * error;		
+/* this function is called at fixed intervals and computes the output of the control */
+float ServoMotor::pid_position(){
+	static int16_t last_error = 0;
+	 error = set_point_position - encoder_position;
+	Kp_error = error * Kp;
+	Ki_error = Ki*error*0.01+Ki_error; //100hz 
+	if(Ki_error > Ki_saturation){
+		Ki_error = Ki_saturation;
+	}else if(Ki_error < -Ki_saturation){
+		Ki_error = -Ki_saturation;
 	}
-	temp = summation + error;
+
+	Kd_error = (error-last_error)*Kd*100; 
+	last_error = error;	
+	return Kp_error + Ki_error +Kd_error;
 	
-	if(temp > max_summation){
-		iterm = MAX_SUMMATION; 
-	}else if(temp < -max_summation){
-		iterm = -MAX_SUMMATION;
-	}else{
-		summation = temp;
-		iterm = summation * I_factor ;
+}
+void ServoMotor::update_encoder_velocity() {
+	static int16_t last_encoder_position = 0;
+	 encoder_velocity = (encoder_position -  last_encoder_position);
+	 last_encoder_position = encoder_position;
+}
+float ServoMotor::pid_velocity(){
+	static int16_t last_error; 
+	update_encoder_velocity();
+	velocity_error =  +set_point_velocity-encoder_velocity;
+	Vp_error = velocity_error * Vp;
+	Vi_error = Vi_error + velocity_error*0.1;
+	if(Vi_error > Vi_saturation){
+	Vi_error = Vi_saturation;
+	}else if(Vi_error < -Vi_saturation){
+	Vi_error = -Vi_saturation;
 	}
-	return int16_t((pterm)/SCALER);
+	Vd_error = (velocity_error-last_error)*100;
+	last_error = velocity_error;
+	return Vp*Vp_error + Vi * Vi_error;
+	
 }
 
-void ServoMotor::rotate(uint32_t current_time){
-	int16_t output;
-	/*Update the PID at a frequency of 1khz */
-	if(current_time - old_time > 10){
-		old_time = current_time;
-		output = pi(); 
+void ServoMotor::rotate(){
+		int16_t output = (int16_t)pid_position(); 
 	
 		/*Change direction if output is less than zero */
-	//	usart_sendln(output);
 		if(output > 0){
 			*servo_register |= dir_a  ;
 			*servo_register &= ~dir_b;
@@ -83,40 +84,92 @@ void ServoMotor::rotate(uint32_t current_time){
 			output = output * -1;
 		}
 		/* Limit the maximum output */ 	
-	
+		if(output > max_pwm){
+			output = max_pwm;
+		}	
 		*servo_pwm = output;
-	//	usart_sendln(summation);
-		
+}
+void ServoMotor::speed(){
+		int16_t output = (int16_t)pid_velocity(); 
+	
+		/*Change direction if output is less than zero */
+		if(output > 0){
+			*servo_register |= dir_a  ;
+			*servo_register &= ~dir_b;
+		}else{
+			*servo_register &= ~dir_a;
+			*servo_register |= dir_b;
+			output = output * -1;
+		}
+		/* Limit the maximum output */ 	
+		if(output > max_pwm){
+			output = max_pwm;
+		}	
+		*servo_pwm = output;
+}
+
+void ServoMotor::move(uint32_t current_time ){
+	switch (STATE)
+	{
+		case SE_WAIT:
+			done = true;
+			if (current_time - last_time > 100){
+				rotate();	
+				last_time = current_time;
+			}
+			if (start ==1){
+				STATE = SE_ACCEL;
+				last_velocity_time=0;
+				if(new_position-set_point_position < 0){
+					set_point_velocity = speed_val*-1;
+				}else{
+					set_point_velocity = speed_val; 
+				}
+				done = false ;
+			}
+		break;
+		case SE_ACCEL:
+			if(current_time - last_velocity_time > 1000){
+				last_velocity_time = current_time;
+				speed(); 
+			}
+			if(encoder_position >= new_position){
+				set_point_position = new_position;
+				start = 0;
+				STATE = SE_WAIT;
+			}
+		break;
 	}
 }
-/*Updates the absolute position from the tachometer in the motor*/
-void ServoMotor::tacho(uint8_t plus, uint8_t min){
-	if(tacho_state == 0){
+/*Updates the absolute position of the encoder in the motor*/
+void ServoMotor::update_encoder_position(uint8_t plus, uint8_t min){
+	
+	if(encoder_rising_edge  == 0){
 		/* If plus goes high and min is also high it went fowards 
 		 * else it went backwards */
 		if(plus){
 			if(min){
-				absolute_position--;
+				encoder_position--;
 			}else{
-				absolute_position++;
+				encoder_position++;
 			}
-			tacho_state=1; 
+			encoder_rising_edge = 1; 
 		}
 	}else{
 		if(!plus){
-			tacho_state = 0; 
+			encoder_rising_edge  = 0; 
 		}
 	}
-
 }
 
 void ServoMotor::reset(){
-	absolute_position = 0; 
-	target_pos = 0; 
+	set_point_position = 0; 
+	encoder_position = 0; 
+	set_point_velocity = 0;
+	Ki_error = 0; 
 }
-
-void ServoMotor::reset_summation(){
-	summation = 0; 
+bool ServoMotor::is_done(){
+	return done;
 }
 // default destructor
 ServoMotor::~ServoMotor()

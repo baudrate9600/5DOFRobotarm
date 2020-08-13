@@ -50,6 +50,7 @@ uint8_t dir_a,dir_b;
 /* Stays high until the falling edge of the encoder signal */ 
 uint8_t encoder_rising_edge ; 
 
+bool done;
 public:
 	ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register ,uint8_t dir_a,uint8_t dir_b);
 	ServoMotor( const ServoMotor &c );
@@ -61,6 +62,7 @@ public:
 	void rotate();
 	void speed(); 
 	void reset_summation();
+	bool is_done();
 	~ServoMotor();
 protected:
 private:

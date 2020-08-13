@@ -112,6 +112,7 @@ void ServoMotor::move(uint32_t current_time ){
 	switch (STATE)
 	{
 		case SE_WAIT:
+			done = true;
 			if (current_time - last_time > 100){
 				rotate();	
 				last_time = current_time;
@@ -119,26 +120,23 @@ void ServoMotor::move(uint32_t current_time ){
 			if (start ==1){
 				STATE = SE_ACCEL;
 				last_velocity_time=0;
-				usart_sendln(encoder_position);
 				if(new_position-set_point_position < 0){
 					set_point_velocity = speed_val*-1;
 				}else{
 					set_point_velocity = speed_val; 
 				}
-		}
+				done = false ;
+			}
 		break;
 		case SE_ACCEL:
-			
 			if(current_time - last_velocity_time > 1000){
 				last_velocity_time = current_time;
 				speed(); 
 			}
-			if(encoder_position == new_position){
+			if(encoder_position >= new_position){
 				set_point_position = new_position;
 				start = 0;
 				STATE = SE_WAIT;
-				usart_sendln(encoder_position);
-				usart_sendln("DONE");
 			}
 		break;
 	}
@@ -170,7 +168,9 @@ void ServoMotor::reset(){
 	set_point_velocity = 0;
 	Ki_error = 0; 
 }
-
+bool ServoMotor::is_done(){
+	return done;
+}
 // default destructor
 ServoMotor::~ServoMotor()
 {

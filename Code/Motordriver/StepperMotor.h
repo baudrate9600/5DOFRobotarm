@@ -43,13 +43,13 @@ class StepperMotor
 public:
 	/* Start the rotation of the stepper motor */ 	
 	uint8_t start; 
-	
+	bool done;	
 	/* Keeps track of where the stepper is and where it should go to*/
 	int16_t current_pos; 
 	int16_t target_pos; 
 	
 	/* Total number of steps , and the treshholds values */
-	uint16_t num_steps,t0,t1;
+	int16_t num_steps,t0,t1;
 	
 	/* Rate at which the stepper motor accelerates */
 	uint16_t acceleration; 
@@ -85,6 +85,7 @@ public:
 	stepper_fsm fsm(uint32_t current_time);
 	int step(); 
 	void reset();
+	bool is_done();
 	~StepperMotor();
 protected:
 private:

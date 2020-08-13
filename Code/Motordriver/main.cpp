@@ -123,7 +123,7 @@ void init_motors(){
 	float Kd[3] = {0.1,0.1,0.1};
 	float Ki_saturation = 255;
 	float Vi_saturation = 10;  
-	float Vp[3] = {2,2,2};
+	float Vp[3] = {5,2,2};
 	float Vi[3] = {0.1,0.1,0.1};
 	
 	for(int i = 0; i < 3; i++){
@@ -137,6 +137,9 @@ void init_motors(){
 		g_servo_motors[i].set_point_velocity = 0; 
 		g_servo_motors[i].set_point_position = 0; 
 	}	
+	
+}
+void disable_motors(){
 	
 }
 void process_stepper_command(char * command,StepperMotor * stepperMotor){
@@ -168,9 +171,6 @@ void process_stepper_command(char * command,StepperMotor * stepperMotor){
 void process_servo_command(char * command, ServoMotor * servoMotor){
 	char * ptr = &command[3]; 
 	switch(command[2]){
-		case 'S':
-			servoMotor->start = atoi(ptr);
-		break; 
 		case 'V':
 			servoMotor->speed_val = atoi(ptr);
 		break;
@@ -232,6 +232,7 @@ int main(void)
 		R_RUNNING,
 		R_DONE,
 		R_ERROR,
+		R_STOP,
 		}; 
 	robot_state_t state = R_WAIT;
 
@@ -276,18 +277,24 @@ int main(void)
 					if(host_command[0] == 'G'){
 						usart_sendln('R');
 						state = R_RUNNING;
-						init_motors();
+						g_servo_motors[0].start = 1;
+						g_servo_motors[1].start = 1; 
+						
 					}else if(host_command[0] == 'T'){
 					//	process_servo_command(host_command,&g_servo_motors[0]);
-					motor_select =  host_command[1]-48;
-					usart_sendln(motor_select);
-					process_stepper_command(host_command,&g_stepper_motors[motor_select]);
+						motor_select =  host_command[1]-48;
+						process_stepper_command(host_command,&g_stepper_motors[motor_select]);
+					}else if (host_command[0] == 'S'){
+						motor_select = host_command[1]-48;
+						process_servo_command(host_command,&g_servo_motors[motor_select]);
 					}
 				}
 			break;
 			case R_RUNNING:
 			is_done = is_done && g_stepper_motors[0].is_done();
 			is_done = is_done && g_stepper_motors[1].is_done();
+			is_done = is_done && g_servo_motors[0].is_done();
+			is_done = is_done && g_servo_motors[1].is_done();
 
 			if(is_done == 1){
 				state = R_DONE;
@@ -297,6 +304,10 @@ int main(void)
 			case R_DONE:
 				usart_sendln('D');
 				state = R_START;
+			break;
+			case R_STOP:
+				disable_motors();	
+				break;
 			break;
 		}
 		
@@ -308,6 +319,7 @@ int main(void)
 		if(state == R_RUNNING || state == R_START || state == R_DONE){
 			spi_shift_in_direction(); 
 			g_servo_motors[0].move(timer_10k());	
+			g_servo_motors[1].move(timer_10k());
 			if(PINC != encoder_positions){
 				encoder_positions = PINC;
 				g_servo_motors[0].update_encoder_position(encoder_positions& SERVO0_ENCODER_PLUS,encoder_positions & SERVO0_ENCODER_MIN);

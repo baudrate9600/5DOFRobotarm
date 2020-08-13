@@ -10,6 +10,8 @@
 #define __SERVOMOTOR_H__
 #include <avr/io.h>
 typedef enum  {    SE_WAIT,
+				   SE_POSITIVE,
+				   SE_NEGATIVE,
 				   SE_ACCEL,
 				   SE_CONSTANT,
 				   SE_DECEL

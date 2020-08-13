@@ -109,6 +109,7 @@ void ServoMotor::speed(){
 }
 
 void ServoMotor::move(uint32_t current_time ){
+	static bool is_positive ;
 	switch (STATE)
 	{
 		case SE_WAIT:
@@ -122,8 +123,10 @@ void ServoMotor::move(uint32_t current_time ){
 				last_velocity_time=0;
 				if(new_position-set_point_position < 0){
 					set_point_velocity = speed_val*-1;
+					is_positive = false;
 				}else{
 					set_point_velocity = speed_val; 
+					is_positive = true;
 				}
 				done = false ;
 			}
@@ -133,11 +136,20 @@ void ServoMotor::move(uint32_t current_time ){
 				last_velocity_time = current_time;
 				speed(); 
 			}
-			if(encoder_position >= new_position){
-				set_point_position = new_position;
-				start = 0;
-				STATE = SE_WAIT;
+			if(is_positive == true){
+				if(encoder_position >= new_position){
+					set_point_position = new_position;
+					start = 0;
+					STATE = SE_WAIT;
+				}	
+			}else{
+				if(encoder_position <= new_position){
+					set_point_position = new_position;
+					start = 0;
+					STATE = SE_WAIT;
+				}
 			}
+			
 		break;
 	}
 }

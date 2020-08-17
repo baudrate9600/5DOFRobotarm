@@ -10,6 +10,7 @@
 #include <avr/interrupt.h>
 
 uint32_t timer_counter;
+uint32_t timer_counter_2;
 
 //This snippet was generated with this online program
 //https://www.arduinoslovakia.eu/application/timer-calculator
@@ -21,13 +22,17 @@ void timer_enable(){
 
 	// 10000 Hz (16000000/((24+1)*64))
 	OCR2A = 24;
+	OCR2B = 4;
 	// CTC
 	TCCR2A |= (1 << WGM21);
 	// Prescaler 64
 	TCCR2B |= (1 << CS22);
 	// Output Compare Match A Interrupt Enable
 	TIMSK2 |= (1 << OCIE2A);
+	TIMSK2 |= (1 << 0CIE2B);
+	
 	timer_counter = 0;
+	timer_counter_2  = 0;
 }
 //Stop the  timer
 void timer_disable(){

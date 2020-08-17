@@ -37,6 +37,7 @@ int16_t max_pwm;
 float Ki_saturation; 
 float Vi_saturation;
 
+int16_t PWM_UP, PWM_DOWN;
 int16_t start; 
 uint32_t last_time;
 uint32_t last_velocity_time;
@@ -61,8 +62,6 @@ public:
 	void update_encoder_position(uint8_t plus,uint8_t min);
 	void update_encoder_velocity();
 	void move(uint32_t current_time);
-	void rotate();
-	void speed(); 
 	void reset_summation();
 	bool is_done();
 	~ServoMotor();
@@ -70,8 +69,13 @@ protected:
 private:
 	float pid_position();
 	float pid_velocity();
+	void  set_pwm(float val);
+	bool  ramp_step(uint32_t current_time);
+	bool  sample_position_loop(uint32_t current_time);
+	bool  sample_velocity_loop(uint32_t current_time);
 	ServoMotor& operator=( const ServoMotor &c );
-
+	uint8_t base_velocity;
+	int sign;
 }; //ServoMotor
 
 #endif //__SERVOMOTOR_H__

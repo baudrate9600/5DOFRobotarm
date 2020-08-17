@@ -119,12 +119,13 @@ void init_motors(){
 	
 	
 	float Kp[3]	= {2,5,5};
-	float Ki[3] = {0,0,0};
+	float Ki[3] = {0.1,0,0};
 	float Kd[3] = {0.1,0.1,0.1};
 	float Ki_saturation = 255;
-	float Vi_saturation = 10;  
-	float Vp[3] = {5,2,2};
-	float Vi[3] = {0.1,0.1,0.1};
+	float Vi_saturation = 255;  
+	float Vp[3] = {1,2,2};
+	float Vi[3] = {0,0.1,0.1};
+	float Vd[3] = {1,1,1};
 	
 	for(int i = 0; i < 3; i++){
 		g_servo_motors[i].Kp = Kp[i];
@@ -133,6 +134,7 @@ void init_motors(){
 		g_servo_motors[i].Kd = Kd[i]; 
 		g_servo_motors[i].Vp = Vp[i]; 
 		g_servo_motors[i].Vi = Vi[i];
+		g_servo_motors[i].Vd = Vd[i];
 		g_servo_motors[i].Vi_saturation = Vi_saturation;
 		g_servo_motors[i].set_point_velocity = 0; 
 		g_servo_motors[i].set_point_position = 0; 
@@ -168,8 +170,10 @@ void process_stepper_command(char * command,StepperMotor * stepperMotor){
 	}	
 	usart_sendln(status);
 }
+
 void process_servo_command(char * command, ServoMotor * servoMotor){
 	char * ptr = &command[3]; 
+	char status = 'T';
 	switch(command[2]){
 		case 'V':
 			servoMotor->speed_val = atoi(ptr);
@@ -204,7 +208,11 @@ void process_servo_command(char * command, ServoMotor * servoMotor){
 		case 'r': 
 			servoMotor->reset(); 
 		break; 
+		default:
+		status = 'F';
+		break;
 	}
+	usart_sendln(status);
 }
 
 int main(void)
@@ -278,7 +286,7 @@ int main(void)
 						usart_sendln('R');
 						state = R_RUNNING;
 						g_servo_motors[0].start = 1;
-						g_servo_motors[1].start = 1; 
+					//	g_servo_motors[1].start = 1; 
 						
 					}else if(host_command[0] == 'T'){
 					//	process_servo_command(host_command,&g_servo_motors[0]);
@@ -291,10 +299,7 @@ int main(void)
 				}
 			break;
 			case R_RUNNING:
-			is_done = is_done && g_stepper_motors[0].is_done();
-			is_done = is_done && g_stepper_motors[1].is_done();
 			is_done = is_done && g_servo_motors[0].is_done();
-			is_done = is_done && g_servo_motors[1].is_done();
 
 			if(is_done == 1){
 				state = R_DONE;
@@ -314,7 +319,6 @@ int main(void)
 		if(state == R_RUNNING){
 			g_stepper_motors[0].rotate(timer_10k());
 			g_stepper_motors[1].rotate(timer_10k());
-
 		}
 		if(state == R_RUNNING || state == R_START || state == R_DONE){
 			spi_shift_in_direction(); 

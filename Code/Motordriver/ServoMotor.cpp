@@ -14,7 +14,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include "Usart.h"
 
+#define POSITION_LOOP_SAMPLE_TIME 100 
+#define VELOCITY_LOOP_SAMPLE_TIME 2000
 extern int16_t g_delta_time_encoder;
 ServoMotor::ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register_ ,uint8_t dir_a_,uint8_t dir_b_)
 {
@@ -22,8 +25,11 @@ ServoMotor::ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register_
 	servo_register = servo_register_;	
 	dir_a = dir_a_;
 	dir_b = dir_b_;
+	Vi_saturation = 255;
 	max_pwm = 255; 
 	STATE = SE_WAIT;
+	PWM_UP = 200;
+	PWM_DOWN = 100;
 } //ServoMotor
 
 void ServoMotor::set_pid_paramters(float Kp_, float Ki_, float Kd_){
@@ -37,7 +43,7 @@ float ServoMotor::pid_position(){
 	static int16_t last_error = 0;
 	 error = set_point_position - encoder_position;
 	Kp_error = error * Kp;
-	Ki_error = Ki*error*0.01+Ki_error; //100hz 
+	Ki_error += error;  
 	if(Ki_error > Ki_saturation){
 		Ki_error = Ki_saturation;
 	}else if(Ki_error < -Ki_saturation){
@@ -51,7 +57,7 @@ float ServoMotor::pid_position(){
 }
 void ServoMotor::update_encoder_velocity() {
 	static int16_t last_encoder_position = 0;
-	 encoder_velocity = (encoder_position -  last_encoder_position);
+	 encoder_velocity = (encoder_position -  last_encoder_position)*5;
 	 last_encoder_position = encoder_position;
 }
 float ServoMotor::pid_velocity(){
@@ -59,20 +65,21 @@ float ServoMotor::pid_velocity(){
 	update_encoder_velocity();
 	velocity_error =  +set_point_velocity-encoder_velocity;
 	Vp_error = velocity_error * Vp;
-	Vi_error = Vi_error + velocity_error*0.1;
+	Vi_error += velocity_error;
 	if(Vi_error > Vi_saturation){
 	Vi_error = Vi_saturation;
 	}else if(Vi_error < -Vi_saturation){
 	Vi_error = -Vi_saturation;
 	}
-	Vd_error = (velocity_error-last_error)*100;
+	Vd_error = (velocity_error-last_error);
 	last_error = velocity_error;
-	return Vp*Vp_error + Vi * Vi_error;
+	return Vp*Vp_error + Vi * Vi_error + Vd_error*Vd + sign*base_velocity;
 	
 }
 
-void ServoMotor::rotate(){
-		int16_t output = (int16_t)pid_position(); 
+
+void ServoMotor::set_pwm(float val){
+		int16_t output = (int16_t)val; 
 	
 		/*Change direction if output is less than zero */
 		if(output > 0){
@@ -89,67 +96,79 @@ void ServoMotor::rotate(){
 		}	
 		*servo_pwm = output;
 }
-void ServoMotor::speed(){
-		int16_t output = (int16_t)pid_velocity(); 
-	
-		/*Change direction if output is less than zero */
-		if(output > 0){
-			*servo_register |= dir_a  ;
-			*servo_register &= ~dir_b;
-		}else{
-			*servo_register &= ~dir_a;
-			*servo_register |= dir_b;
-			output = output * -1;
-		}
-		/* Limit the maximum output */ 	
-		if(output > max_pwm){
-			output = max_pwm;
-		}	
-		*servo_pwm = output;
+/*
+bool ServoMotor::ramp_step(uint32_t current_time){
+	static uint32_t ramp_time = 0;
+	if(current_time - ramp_time > delta_time){
+		ramp_time = current_time;
+		return true;
+	}else{
+		return false;
+	}
+}
+*/
+bool ServoMotor::sample_position_loop(uint32_t current_time){
+	static uint32_t sample_time = 0; 
+	if(current_time - sample_time > POSITION_LOOP_SAMPLE_TIME){
+		sample_time = current_time;
+		return true;
+	}else{
+		return false; 
+	}
+}
+bool ServoMotor::sample_velocity_loop(uint32_t current_time){
+	static uint32_t sample_time = 0; 
+	if(current_time - sample_time > VELOCITY_LOOP_SAMPLE_TIME){
+		sample_time = current_time;
+		return true;
+	}else{
+		return false; 
+	}
 }
 
-void ServoMotor::move(uint32_t current_time ){
-	static bool is_positive ;
+void ServoMotor::move(uint32_t current_time ){	
+	int16_t pwm;
 	switch (STATE)
 	{
 		case SE_WAIT:
-			done = true;
-			if (current_time - last_time > 100){
-				rotate();	
-				last_time = current_time;
+			if(sample_position_loop(current_time) == true){
+				set_pwm(pid_position());
 			}
-			if (start ==1){
-				STATE = SE_ACCEL;
-				last_velocity_time=0;
-				if(new_position-set_point_position < 0){
-					set_point_velocity = speed_val*-1;
-					is_positive = false;
+			done = true;
+			if(start == 1){
+				if(new_position > encoder_position){
+					sign = 1;
+					set_point_velocity = speed_val;
+					pwm = PWM_DOWN;
 				}else{
-					set_point_velocity = speed_val; 
-					is_positive = true;
+					sign = 0; 
+					set_point_velocity = speed_val * -1;
+					pwm = -PWM_UP; 
 				}
-				done = false ;
+				done = false;
+				STATE = SE_CONSTANT;
+				Vi_error = 0;
+				start = 0;
+				set_pwm(pwm);
 			}
 		break;
-		case SE_ACCEL:
-			if(current_time - last_velocity_time > 1000){
-				last_velocity_time = current_time;
-				speed(); 
-			}
-			if(is_positive == true){
+		case SE_CONSTANT:
+			if(sign){
 				if(encoder_position >= new_position){
-					set_point_position = new_position;
-					start = 0;
-					STATE = SE_WAIT;
-				}	
+				STATE = SE_WAIT;
+				set_point_position = new_position;
+				}
 			}else{
 				if(encoder_position <= new_position){
-					set_point_position = new_position;
-					start = 0;
-					STATE = SE_WAIT;
+				STATE = SE_WAIT;
+				set_point_position = new_position;
 				}
 			}
-			
+				
+		break; 
+		
+		default:
+		/* Your code here */
 		break;
 	}
 }

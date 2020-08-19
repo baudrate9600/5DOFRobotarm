@@ -41,8 +41,8 @@ shift register
 uart_io_t g_uart_io;			
 uint8_t   g_direction_register;	// 8 bit vector sent into the shift register containing the directions 
 StepperMotor g_stepper_motors[2] = {
-									StepperMotor(0,0.1542546,STEPPER0_DIR,STEPPER0_STEP),
-									StepperMotor(0,0.0154206,STEPPER1_DIR,STEPPER1_STEP) 
+									StepperMotor(0,0.0857142,STEPPER0_DIR,STEPPER0_STEP),
+									StepperMotor(0,0.0143946,STEPPER1_DIR,STEPPER1_STEP) 
 									};
 ServoMotor   g_servo_motors[3]   = {
 								  ServoMotor(&SERVO0_PWM,&g_direction_register,SERVO0_DIRA,SERVO0_DIRB),
@@ -285,11 +285,7 @@ int main(void)
 					if(host_command[0] == 'G'){
 						usart_sendln('R');
 						state = R_RUNNING;
-						g_servo_motors[0].start = 1;
-					//	g_servo_motors[1].start = 1; 
-						
 					}else if(host_command[0] == 'T'){
-					//	process_servo_command(host_command,&g_servo_motors[0]);
 						motor_select =  host_command[1]-48;
 						process_stepper_command(host_command,&g_stepper_motors[motor_select]);
 					}else if (host_command[0] == 'S'){
@@ -299,8 +295,8 @@ int main(void)
 				}
 			break;
 			case R_RUNNING:
-			is_done = is_done && g_servo_motors[0].is_done();
-
+			is_done = is_done && g_stepper_motors[0].is_done();
+			is_done = is_done && g_stepper_motors[1].is_done();
 			if(is_done == 1){
 				state = R_DONE;
 			}
@@ -322,8 +318,8 @@ int main(void)
 		}
 		if(state == R_RUNNING || state == R_START || state == R_DONE){
 			spi_shift_in_direction(); 
-			g_servo_motors[0].move(timer_10k());	
-			g_servo_motors[1].move(timer_10k());
+		//	g_servo_motors[0].move(timer_10k());	
+		//	g_servo_motors[1].move(timer_10k());
 			if(PINC != encoder_positions){
 				encoder_positions = PINC;
 				g_servo_motors[0].update_encoder_position(encoder_positions& SERVO0_ENCODER_PLUS,encoder_positions & SERVO0_ENCODER_MIN);

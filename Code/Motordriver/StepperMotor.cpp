@@ -58,7 +58,7 @@ int StepperMotor::rotate(uint32_t current_time){
 		uint16_t vmax= 0.5*(acceleration*duration-sqrt(pow(acceleration*duration,2)-(angle*acceleration*4)));
 		t0=(pow(vmax,2)*num_steps)/(2*angle*acceleration);
 		t1 =num_steps-t0;
-		long_pulse_width =10000* sqrt(2/(acceleration*step_to_angle)) * S_SCALER;
+		long_pulse_width =50000* sqrt(2/(acceleration*step_to_angle)) * S_SCALER;
 		/* End  computations */
 
 		step_counter  = 0;

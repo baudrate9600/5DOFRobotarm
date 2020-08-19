@@ -49,7 +49,7 @@ public:
 	int16_t target_pos; 
 	
 	/* Total number of steps , and the treshholds values */
-	int16_t num_steps,t0,t1;
+	int32_t num_steps,t0,t1;
 	
 	/* Rate at which the stepper motor accelerates */
 	uint16_t acceleration; 
@@ -59,7 +59,7 @@ public:
 	int32_t long_pulse_width;
 	uint32_t pulse_width;
 
-	int16_t pulse_width_counter ;
+	int32_t pulse_width_counter ;
 	uint16_t step_counter;
 	
 protected:

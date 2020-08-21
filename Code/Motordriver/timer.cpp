@@ -38,22 +38,21 @@ void timer_disable(){
 	timer_counter = 0; 
 }
 
-//Reset the counter
 void timer_reset(){
 	timer_counter = 0; 
 }
 
-//Return the elapsed time since the counter was enable 
-uint32_t timer_10k(){
+uint32_t timer_50k(){
 	return timer_counter;
 }
-uint32_t timer_50k(){
+uint32_t timer_50kk(){
 	return timer_counter_2;
 }
 
 //interrupt vector 
 ISR (TIMER2_COMPA_vect) {
 	timer_counter++;
+	
 }
 
 ISR (TIMER2_COMPB_vect){

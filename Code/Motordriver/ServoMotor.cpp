@@ -16,64 +16,62 @@
 #include <math.h>
 #include "Usart.h"
 
-#define POSITION_LOOP_SAMPLE_TIME 100 
-#define VELOCITY_LOOP_SAMPLE_TIME 2000
+#define POSITION_LOOP_SAMPLE_TIME 5000 
+#define VELOCITY_LOOP_SAMPLE_TIME 10000
 extern int16_t g_delta_time_encoder;
-ServoMotor::ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register_ ,uint8_t dir_a_,uint8_t dir_b_)
+ServoMotor::ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register_ ,uint8_t dir_a_,uint8_t dir_b_,int polarity)
 {
 	servo_pwm = pwm; 
 	servo_register = servo_register_;	
 	dir_a = dir_a_;
 	dir_b = dir_b_;
 	Vi_saturation = 255;
-	max_pwm = 255; 
-	STATE = SE_WAIT;
-	PWM_UP = 200;
-	PWM_DOWN = 100;
+	Ki_saturation = 255;
+	servo_state = SE_WAIT;
+	if(polarity == 0){
+		a = SE_POSITIVE;
+		b = SE_NEGATIVE;
+	}else if(polarity == 1){
+		a = SE_NEGATIVE;
+		b = SE_POSITIVE;
+	}
 } //ServoMotor
 
-void ServoMotor::set_pid_paramters(float Kp_, float Ki_, float Kd_){
-	Kp = Kp_;
-	Ki= Ki_; 
-	Kd = Kd_; 	
-}
 
 /* this function is called at fixed intervals and computes the output of the control */
-float ServoMotor::pid_position(){
-	static int16_t last_error = 0;
-	 error = set_point_position - encoder_position;
-	Kp_error = error * Kp;
+float ServoMotor::pi_position(){
+	int16_t error = set_point_position - encoder_position;
+	 /* Proportional error */
+	float Kp_error = error * Kp;
 	Ki_error += error;  
 	if(Ki_error > Ki_saturation){
 		Ki_error = Ki_saturation;
 	}else if(Ki_error < -Ki_saturation){
 		Ki_error = -Ki_saturation;
 	}
-
-	Kd_error = (error-last_error)*Kd*100; 
-	last_error = error;	
-	return Kp_error + Ki_error +Kd_error;
+	Ki_error = Ki_error * Ki;
+	return Kp_error + Ki_error;
 	
 }
-void ServoMotor::update_encoder_velocity() {
-	static int16_t last_encoder_position = 0;
-	 encoder_velocity = (encoder_position -  last_encoder_position)*5;
-	 last_encoder_position = encoder_position;
-}
-float ServoMotor::pid_velocity(){
-	static int16_t last_error; 
-	update_encoder_velocity();
-	velocity_error =  +set_point_velocity-encoder_velocity;
-	Vp_error = velocity_error * Vp;
+
+float ServoMotor::pi_velocity(){
+	update_encoder_speed();
+	int16_t velocity_error = set_point_velocity-encoder_velocity;
+	/* Proportional gain */
+	float Vp_error = velocity_error * Vp;
+
+	/* Integral gain */
 	Vi_error += velocity_error;
+
+	/* Anti windup */
 	if(Vi_error > Vi_saturation){
 	Vi_error = Vi_saturation;
 	}else if(Vi_error < -Vi_saturation){
 	Vi_error = -Vi_saturation;
 	}
-	Vd_error = (velocity_error-last_error);
-	last_error = velocity_error;
-	return Vp*Vp_error + Vi * Vi_error + Vd_error*Vd + sign*base_velocity;
+
+	Vi_error = Vi_error * Vi ;
+	return Vp_error +  Vi_error ;
 	
 }
 
@@ -91,22 +89,12 @@ void ServoMotor::set_pwm(float val){
 			output = output * -1;
 		}
 		/* Limit the maximum output */ 	
-		if(output > max_pwm){
-			output = max_pwm;
+		if(output > 255){
+			output = 255;
 		}	
 		*servo_pwm = output;
 }
-/*
-bool ServoMotor::ramp_step(uint32_t current_time){
-	static uint32_t ramp_time = 0;
-	if(current_time - ramp_time > delta_time){
-		ramp_time = current_time;
-		return true;
-	}else{
-		return false;
-	}
-}
-*/
+
 bool ServoMotor::sample_position_loop(uint32_t current_time){
 	static uint32_t sample_time = 0; 
 	if(current_time - sample_time > POSITION_LOOP_SAMPLE_TIME){
@@ -125,50 +113,79 @@ bool ServoMotor::sample_velocity_loop(uint32_t current_time){
 		return false; 
 	}
 }
+/* When the joint has the oppose the force of gravity more torque is required 
+   so different gains need to be used */
+void ServoMotor::gain_schedule(){
+	if(servo_state == a){
+		Vp =  Vp_positive;
+		Vi =  Vi_positive;		
+	}else if(servo_state == b){
+		Vp =  Vp_negative;
+		Vi =  Vi_negative;		
+	}
+}
 
+//Feed foward loop
 void ServoMotor::move(uint32_t current_time ){	
-	int16_t pwm;
-	switch (STATE)
+	switch (servo_state)
 	{
 		case SE_WAIT:
 			if(sample_position_loop(current_time) == true){
-				set_pwm(pid_position());
+				set_pwm(pi_position());
 			}
 			done = true;
 			if(start == 1){
-				if(new_position > encoder_position){
-					sign = 1;
-					set_point_velocity = speed_val;
-					pwm = PWM_DOWN;
-				}else{
-					sign = 0; 
-					set_point_velocity = speed_val * -1;
-					pwm = -PWM_UP; 
-				}
-				done = false;
-				STATE = SE_CONSTANT;
-				Vi_error = 0;
 				start = 0;
-				set_pwm(pwm);
+				done = false;
+				/* Determine the direction the robot joint should turn and 
+				   set the polarity of the motor */
+				if(new_position > encoder_position){
+					*servo_register |= dir_a  ;
+					*servo_register &= ~dir_b;
+					servo_state = SE_POSITIVE;
+				}else{
+					*servo_register &= ~dir_a  ;
+					*servo_register |= dir_b;
+					servo_state = SE_NEGATIVE;
+				}
+				gain_schedule();
 			}
 		break;
-		case SE_CONSTANT:
-			if(sign){
-				if(encoder_position >= new_position){
-				STATE = SE_WAIT;
+		case SE_POSITIVE:
+			if(encoder_position >= new_position){
 				set_point_position = new_position;
-				}
-			}else{
-				if(encoder_position <= new_position){
-				STATE = SE_WAIT;
-				set_point_position = new_position;
-				}
+				servo_state = SE_WAIT;
+				break;
 			}
-				
-		break; 
+			if(sample_velocity_loop(current_time) == true){
+				float output = pi_velocity();
+				if(output > 255){
+					 output = 255;
+				}else if(output < 0){
+					output = 0;
+				}
+				*servo_pwm = (uint8_t) output;
+			}	
 		
-		default:
-		/* Your code here */
+		break; 
+		case SE_NEGATIVE:
+			if(encoder_position <= new_position){
+				set_point_position = new_position;
+				servo_state = SE_WAIT;	
+				break;
+			}
+			if(sample_velocity_loop(current_time) == true){
+				float output = pi_velocity();
+				if(output > 255){
+					//*servo_register |= dir_b  ;
+					 output = 255;	
+				}else if(output < 0){
+					//*servo_register &= ~dir_b  ;
+					 output = 0; 	
+				}
+				*servo_pwm = (uint8_t) output;
+			}	
+			
 		break;
 	}
 }
@@ -193,11 +210,15 @@ void ServoMotor::update_encoder_position(uint8_t plus, uint8_t min){
 	}
 }
 
+void ServoMotor::update_encoder_speed() {
+	static int16_t last_encoder_position = 0;
+	 encoder_velocity = abs(encoder_position -  last_encoder_position)*5;
+	 last_encoder_position = encoder_position;
+}
 void ServoMotor::reset(){
 	set_point_position = 0; 
 	encoder_position = 0; 
 	set_point_velocity = 0;
-	Ki_error = 0; 
 }
 bool ServoMotor::is_done(){
 	return done;

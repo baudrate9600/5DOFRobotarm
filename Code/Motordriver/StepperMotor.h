@@ -81,11 +81,11 @@ private:
 public:
 	StepperMotor(int16_t current_pos, float gear_train, uint8_t dir, uint8_t step);
 	StepperMotor( const StepperMotor &c );
-	int rotate(uint32_t current_time);
+	int			rotate(uint32_t current_time);
 	stepper_fsm fsm(uint32_t current_time);
-	int step(); 
-	void reset();
-	bool is_done();
+	int			step(); 
+	void		reset();
+	bool		is_done();
 	~StepperMotor();
 protected:
 private:

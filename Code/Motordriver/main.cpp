@@ -45,9 +45,9 @@ StepperMotor g_stepper_motors[2] = {
 									StepperMotor(0,0.0143946,STEPPER1_DIR,STEPPER1_STEP) 
 									};
 ServoMotor   g_servo_motors[3]   = {
-								  ServoMotor(&SERVO0_PWM,&g_direction_register,SERVO0_DIRA,SERVO0_DIRB),
-								  ServoMotor(&SERVO1_PWM,&g_direction_register,SERVO1_DIRA,SERVO1_DIRB),
-								  ServoMotor(&SERVO2_PWM,&g_direction_register,SERVO2_DIRA,SERVO2_DIRB)
+								  ServoMotor(&SERVO0_PWM,&g_direction_register,SERVO0_DIRA,SERVO0_DIRB,1),
+								  ServoMotor(&SERVO1_PWM,&g_direction_register,SERVO1_DIRA,SERVO1_DIRB,0),
+								  ServoMotor(&SERVO2_PWM,&g_direction_register,SERVO2_DIRA,SERVO2_DIRB,0)
 								  };
 /* f = 1 / T * 10^-6 *100 [hz] */
 #define PID_SAMPLE_PERIOD_100Hz 100
@@ -117,28 +117,7 @@ void init_motors(){
 	/*Stepper motor */
 	DDRD |= (STEPPER0_DIR) | (STEPPER0_STEP ) | (STEPPER1_DIR) | (STEPPER1_STEP);  
 	
-	
-	float Kp[3]	= {2,5,5};
-	float Ki[3] = {0.1,0,0};
-	float Kd[3] = {0.1,0.1,0.1};
-	float Ki_saturation = 255;
-	float Vi_saturation = 255;  
-	float Vp[3] = {1,2,2};
-	float Vi[3] = {0,0.1,0.1};
-	float Vd[3] = {1,1,1};
-	
-	for(int i = 0; i < 3; i++){
-		g_servo_motors[i].Kp = Kp[i];
-		g_servo_motors[i].Ki = Ki[i];
-		g_servo_motors[i].Ki_saturation = Ki_saturation; 
-		g_servo_motors[i].Kd = Kd[i]; 
-		g_servo_motors[i].Vp = Vp[i]; 
-		g_servo_motors[i].Vi = Vi[i];
-		g_servo_motors[i].Vd = Vd[i];
-		g_servo_motors[i].Vi_saturation = Vi_saturation;
-		g_servo_motors[i].set_point_velocity = 0; 
-		g_servo_motors[i].set_point_position = 0; 
-	}	
+
 	
 }
 void disable_motors(){
@@ -173,36 +152,36 @@ void process_stepper_command(char * command,StepperMotor * stepperMotor){
 
 void process_servo_command(char * command, ServoMotor * servoMotor){
 	char * ptr = &command[3]; 
+	char *ptr2 = &command[4];
 	char status = 'T';
 	switch(command[2]){
 		case 'V':
-			servoMotor->speed_val = atoi(ptr);
+			servoMotor->set_point_velocity = atoi(ptr);
 		break;
 		case 'P':
 			servoMotor->new_position = atoi(ptr);
 		break;
 		//Tune the PID of the position and velocity; 
 		case 'T':
-			switch (command[2])
+			switch (command[3])
 			{
-				ptr++;
-				case 'p':
-					servoMotor->Kp = atoi(ptr)/1000.0;
+				case 'A':
+					servoMotor->Vp_positive = atoi(ptr2)/1000.0;
 				break; 
-				case 'i':
-					servoMotor->Ki = atoi(ptr)/1000.0; 
+				case 'B':
+					servoMotor->Vi_positive = atoi(ptr2)/1000.0; 
 				break; 
-				case 'd': 
-					servoMotor->Kd = atoi(ptr)/1000.0;
+				case 'C':
+					servoMotor->Vp_negative = atoi(ptr2)/1000.0;
 				break;
-				case 'm':
-					servoMotor->max_pwm = atoi(ptr);
+				case 'D':
+					servoMotor->Vi_negative = atoi(ptr2)/1000.0; 
 				break;
-				case 'x':
-					servoMotor->Vp = atoi(ptr)/1000.0;
+				case 'E':
+					servoMotor->Kp = atoi(ptr2)/1000.0;
 				break;
-				case 'y':
-					servoMotor->Vi = atoi(ptr)/1000.0; 
+				case 'F':
+					servoMotor->Ki = atoi(ptr2)/1000.0;
 				break;
 			}
 		case 'r': 
@@ -248,10 +227,7 @@ int main(void)
 	g_uart_io.byte_count = 0; 
 	
 	/*Stores the the previous value of the main counter*/
-	uint32_t pid_sample_time=0;
 	uint8_t encoder_positions = 0;
-
-	uint32_t velocity_sample_time = 0; 
 	
 	/* Variables used to process the command sent from the host */
     char host_command[MAX_BUFFER];
@@ -284,6 +260,7 @@ int main(void)
 					}
 					if(host_command[0] == 'G'){
 						usart_sendln('R');
+						g_servo_motors[0].start = 1;
 						state = R_RUNNING;
 					}else if(host_command[0] == 'T'){
 						motor_select =  host_command[1]-48;
@@ -297,6 +274,7 @@ int main(void)
 			case R_RUNNING:
 			is_done = is_done && g_stepper_motors[0].is_done();
 			is_done = is_done && g_stepper_motors[1].is_done();
+			is_done = is_done && g_servo_motors[0].is_done();
 			if(is_done == 1){
 				state = R_DONE;
 			}
@@ -313,12 +291,12 @@ int main(void)
 		}
 		
 		if(state == R_RUNNING){
-			g_stepper_motors[0].rotate(timer_10k());
-			g_stepper_motors[1].rotate(timer_10k());
+			g_stepper_motors[0].rotate(timer_50k());
+			g_stepper_motors[1].rotate(timer_50k());
 		}
 		if(state == R_RUNNING || state == R_START || state == R_DONE){
 			spi_shift_in_direction(); 
-		//	g_servo_motors[0].move(timer_10k());	
+			g_servo_motors[0].move(timer_50k());	
 		//	g_servo_motors[1].move(timer_10k());
 			if(PINC != encoder_positions){
 				encoder_positions = PINC;

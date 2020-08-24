@@ -30,7 +30,7 @@ int16_t set_point_velocity;
 int16_t encoder_position, encoder_velocity;
 float Ki_saturation, Vi_saturation;
 float Ki_error, Vi_error;
-float Kp,Ki;
+float Kp,Ki,Kd;
 
 
 int16_t start; 
@@ -42,7 +42,10 @@ private:
 volatile uint8_t * servo_register;
 volatile uint8_t * servo_pwm;
 uint8_t dir_a,dir_b;
-
+int16_t last_error;
+uint32_t sample_time_position;
+uint32_t sample_time_velocity;
+int16_t last_encoder_position ;
 /* Stays high until the falling edge of the encoder signal */ 
 uint8_t encoder_rising_edge ; 
 
@@ -62,7 +65,7 @@ public:
 	~ServoMotor();
 protected:
 private:
-	float pi_position();
+	float pid_position();
 	float pi_velocity();
 	void  set_pwm(float val);
 	bool  ramp_step(uint32_t current_time);

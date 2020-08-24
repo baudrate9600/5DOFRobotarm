@@ -87,7 +87,7 @@ void spi_shift_in_direction(){
 		previous_value = g_direction_register;
 	}
 }
-
+/*Load the shift register with all zeros*/
 void spi_clear_register(){
 	SHIFT_PORT &= ~SHIFT_REFRESH;
 	SPDR = 0;
@@ -96,8 +96,8 @@ void spi_clear_register(){
 
 }
 
+/* Initialize motors: */
 void init_motors(){
-		/* Initialize motors: 
 	/* End effector */
 	TCCR1A |= (1 << COM1B1) | (1 << WGM11) | (1 << WGM10); //Enable 0C2B pin as pwm and 
 	TCCR1B |= (1 << CS12); //PWM frequency of 62,500 hz 
@@ -121,7 +121,20 @@ void init_motors(){
 	
 }
 void disable_motors(){
-	
+	DDRD &= ~(SERVO0);
+	DDRD &= ~(SERVO1); 
+	DDRB &= ~(SERVO1);
+	DDRD &= ~(STEPPER0_DIR);
+    DDRD &= ~(STEPPER0_STEP);
+	DDRD &= ~(STEPPER1_DIR);
+    DDRD &= ~(STEPPER1_STEP);  
+}
+void reset_motors(){
+	g_servo_motors[0].reset();
+	g_servo_motors[1].reset();
+	g_servo_motors[2].reset();
+	g_stepper_motors[0].reset();
+	g_stepper_motors[1].reset();	
 }
 void process_stepper_command(char * command,StepperMotor * stepperMotor){
 	char * ptr = &command[3]; 
@@ -183,6 +196,9 @@ void process_servo_command(char * command, ServoMotor * servoMotor){
 				case 'F':
 					servoMotor->Ki = atoi(ptr2)/1000.0;
 				break;
+				case 'G':
+					servoMotor->Kd = atoi(ptr2)/1000.0;	
+				break;
 			}
 		case 'r': 
 			servoMotor->reset(); 
@@ -201,11 +217,7 @@ int main(void)
 	
 	usart_enable(9600);
 	timer_enable();
-	//while(1);
 	
-	for(int i = 0; i < 3; i++){
-		g_servo_motors[i].reset();
-	}
 	sei();
 	/* Flush the receive buffer of the uart */
 	while (UCSR0A & (1<<RXC0)){
@@ -217,11 +229,9 @@ int main(void)
 		R_WAIT,
 		R_START,
 		R_RUNNING,
-		R_DONE,
-		R_ERROR,
-		R_STOP,
+		R_RESET,
 		}; 
-	robot_state_t state = R_WAIT;
+	robot_state_t robot_state  = R_WAIT;
 
 	g_uart_io.new_command = false; 
 	g_uart_io.byte_count = 0; 
@@ -232,80 +242,83 @@ int main(void)
 	/* Variables used to process the command sent from the host */
     char host_command[MAX_BUFFER];
 	int  motor_select;
-	int is_done =1 ;
-	init_motors();
 	while (1){
-		switch(state){
+		/*Check if a new command has arrived */
+		if(g_uart_io.new_command == true){
+			ATOMIC_BLOCK(ATOMIC_FORCEON){
+				memcpy(host_command,(void*)g_uart_io.data_input,MAX_BUFFER);
+				g_uart_io.byte_count = 0; 
+				g_uart_io.new_command = false; 
+				if(host_command[0] == 'R'){
+					robot_state = R_RESET;
+					memset(host_command,0,MAX_BUFFER);
+				}
+			}
+		}
+
+		/*State transitions */
+		switch (robot_state )
+		{
 			case R_WAIT:
-				if(g_uart_io.new_command == true){
-					ATOMIC_BLOCK(ATOMIC_FORCEON){
-						memcpy(host_command,(void*)g_uart_io.data_input,MAX_BUFFER);
-						g_uart_io.byte_count = 0; 
-						g_uart_io.new_command = false; 
-					}
-					if(host_command[0] == 'Z'){
+				/* When host sends Z transition to start */
+				if(host_command[0] == 'Z'){
 						usart_sendln('T');
-						state = R_START;
+						robot_state  = R_START;
+						memset(host_command,0,MAX_BUFFER);
+						reset_motors();
+						init_motors();
 					}else{
-						usart_sendln('F');
-					}
 				}
 			break;
 			case R_START:
-				if(g_uart_io.new_command == true){
-					ATOMIC_BLOCK(ATOMIC_FORCEON){
-						memcpy(host_command,(void*)g_uart_io.data_input,MAX_BUFFER);
-						g_uart_io.byte_count = 0; 
-						g_uart_io.new_command = false; 
-					}
-					if(host_command[0] == 'G'){
-						usart_sendln('R');
-						g_servo_motors[0].start = 1;
-						state = R_RUNNING;
-					}else if(host_command[0] == 'T'){
-						motor_select =  host_command[1]-48;
-						process_stepper_command(host_command,&g_stepper_motors[motor_select]);
-					}else if (host_command[0] == 'S'){
-						motor_select = host_command[1]-48;
-						process_servo_command(host_command,&g_servo_motors[motor_select]);
-					}
+				/*GO*/	
+				if(host_command[0] == 'G'){
+					usart_sendln('R');
+					g_servo_motors[0].start = 1;
+					g_servo_motors[1].start = 1;
+					robot_state  = R_RUNNING;
+					memset(host_command,0,MAX_BUFFER);
+				/*Set stepper motor parameters */
+				}else if(host_command[0] == 'T'){
+					motor_select =  host_command[1]-48;
+					process_stepper_command(host_command,&g_stepper_motors[motor_select]);
+					memset(host_command,0,MAX_BUFFER);
+				/*Set servo motor parameters */
+				}else if (host_command[0] == 'S'){
+					motor_select = host_command[1]-48;
+					process_servo_command(host_command,&g_servo_motors[motor_select]);
+					memset(host_command,0,MAX_BUFFER);
 				}
 			break;
 			case R_RUNNING:
-			is_done = is_done && g_stepper_motors[0].is_done();
-			is_done = is_done && g_stepper_motors[1].is_done();
-			is_done = is_done && g_servo_motors[0].is_done();
-			if(is_done == 1){
-				state = R_DONE;
-			}
-			is_done = 1;
+				if(g_stepper_motors[0].is_done() && g_stepper_motors[1].is_done() && g_servo_motors[0].is_done() && g_servo_motors[1].is_done()){
+					usart_sendln('D');
+					robot_state = R_START; 
+				}
+			break;	
+			case R_RESET: 
+				disable_motors();
+				reset_motors();	
+				robot_state = R_WAIT;
 			break;
-			case R_DONE:
-				usart_sendln('D');
-				state = R_START;
-			break;
-			case R_STOP:
-				disable_motors();	
-				break;
-			break;
+
 		}
-		
-		if(state == R_RUNNING){
+	
+		if(robot_state == R_RUNNING){
+			/*Open loop control of stepper motor */
 			g_stepper_motors[0].rotate(timer_50k());
 			g_stepper_motors[1].rotate(timer_50k());
 		}
-		if(state == R_RUNNING || state == R_START || state == R_DONE){
-			spi_shift_in_direction(); 
+			/*Closed loop control of servo motor */
+		if(robot_state == R_RUNNING || robot_state == R_START){
 			g_servo_motors[0].move(timer_50k());	
-		//	g_servo_motors[1].move(timer_10k());
-			if(PINC != encoder_positions){
-				encoder_positions = PINC;
-				g_servo_motors[0].update_encoder_position(encoder_positions& SERVO0_ENCODER_PLUS,encoder_positions & SERVO0_ENCODER_MIN);
-				g_servo_motors[1].update_encoder_position(encoder_positions& SERVO1_ENCODER_PLUS,encoder_positions & SERVO1_ENCODER_MIN);
-				g_servo_motors[2].update_encoder_position(encoder_positions& SERVO2_ENCODER_PLUS,encoder_positions & SERVO2_ENCODER_MIN);
-			}
+			g_servo_motors[1].move(timer_50k());
 		}
-			
+		spi_shift_in_direction();
+			encoder_positions = PINC;
+			g_servo_motors[0].update_encoder_position(encoder_positions& SERVO0_ENCODER_PLUS,encoder_positions & SERVO0_ENCODER_MIN);
+			g_servo_motors[1].update_encoder_position(encoder_positions& SERVO1_ENCODER_PLUS,encoder_positions & SERVO1_ENCODER_MIN);
+			g_servo_motors[2].update_encoder_position(encoder_positions& SERVO2_ENCODER_PLUS,encoder_positions & SERVO2_ENCODER_MIN);
 	}
 }
 

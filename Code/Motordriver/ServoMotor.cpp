@@ -18,6 +18,7 @@
 
 #define POSITION_LOOP_SAMPLE_TIME 5000 
 #define VELOCITY_LOOP_SAMPLE_TIME 10000
+#define BRAKING_RANGE 20
 extern int16_t g_delta_time_encoder;
 ServoMotor::ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register_ ,uint8_t dir_a_,uint8_t dir_b_,int polarity)
 {
@@ -39,7 +40,7 @@ ServoMotor::ServoMotor(volatile uint8_t * pwm,volatile uint8_t * servo_register_
 
 
 /* this function is called at fixed intervals and computes the output of the control */
-float ServoMotor::pi_position(){
+float ServoMotor::pid_position(){
 	int16_t error = set_point_position - encoder_position;
 	 /* Proportional error */
 	float Kp_error = error * Kp;
@@ -50,7 +51,9 @@ float ServoMotor::pi_position(){
 		Ki_error = -Ki_saturation;
 	}
 	Ki_error = Ki_error * Ki;
-	return Kp_error + Ki_error;
+	float Kd_error = (error - last_error) * Kd;
+	last_error = error;
+	return Kp_error + Ki_error + Kd_error;
 	
 }
 
@@ -96,18 +99,16 @@ void ServoMotor::set_pwm(float val){
 }
 
 bool ServoMotor::sample_position_loop(uint32_t current_time){
-	static uint32_t sample_time = 0; 
-	if(current_time - sample_time > POSITION_LOOP_SAMPLE_TIME){
-		sample_time = current_time;
+	if(current_time - sample_time_position > POSITION_LOOP_SAMPLE_TIME){
+		sample_time_position = current_time;
 		return true;
 	}else{
 		return false; 
 	}
 }
 bool ServoMotor::sample_velocity_loop(uint32_t current_time){
-	static uint32_t sample_time = 0; 
-	if(current_time - sample_time > VELOCITY_LOOP_SAMPLE_TIME){
-		sample_time = current_time;
+	if(current_time - sample_time_velocity > VELOCITY_LOOP_SAMPLE_TIME){
+		sample_time_velocity = current_time;
 		return true;
 	}else{
 		return false; 
@@ -131,7 +132,7 @@ void ServoMotor::move(uint32_t current_time ){
 	{
 		case SE_WAIT:
 			if(sample_position_loop(current_time) == true){
-				set_pwm(pi_position());
+				set_pwm(pid_position());
 			}
 			done = true;
 			if(start == 1){
@@ -152,7 +153,7 @@ void ServoMotor::move(uint32_t current_time ){
 			}
 		break;
 		case SE_POSITIVE:
-			if(encoder_position >= new_position){
+			if(encoder_position >= (new_position-BRAKING_RANGE)){
 				set_point_position = new_position;
 				servo_state = SE_WAIT;
 				break;
@@ -169,7 +170,7 @@ void ServoMotor::move(uint32_t current_time ){
 		
 		break; 
 		case SE_NEGATIVE:
-			if(encoder_position <= new_position){
+			if(encoder_position <= (new_position+BRAKING_RANGE)){
 				set_point_position = new_position;
 				servo_state = SE_WAIT;	
 				break;
@@ -211,7 +212,6 @@ void ServoMotor::update_encoder_position(uint8_t plus, uint8_t min){
 }
 
 void ServoMotor::update_encoder_speed() {
-	static int16_t last_encoder_position = 0;
 	 encoder_velocity = abs(encoder_position -  last_encoder_position)*5;
 	 last_encoder_position = encoder_position;
 }
@@ -219,6 +219,7 @@ void ServoMotor::reset(){
 	set_point_position = 0; 
 	encoder_position = 0; 
 	set_point_velocity = 0;
+	servo_state = SE_WAIT;
 }
 bool ServoMotor::is_done(){
 	return done;

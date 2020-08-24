@@ -152,6 +152,7 @@ bool StepperMotor::is_done(){
 void StepperMotor::reset(){
 	current_pos = 0; 
 	target_pos  = 0; 
+	state = S_WAIT;
 }
 // default destructor
 StepperMotor::~StepperMotor()

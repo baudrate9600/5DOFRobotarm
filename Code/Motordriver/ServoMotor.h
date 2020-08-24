@@ -49,6 +49,8 @@ int16_t last_encoder_position ;
 /* Stays high until the falling edge of the encoder signal */ 
 uint8_t encoder_rising_edge ; 
 
+float last_pi_velocity_output;
+
 
 float Vp,Vi;
 int a,b;

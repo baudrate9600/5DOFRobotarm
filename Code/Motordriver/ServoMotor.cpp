@@ -74,7 +74,9 @@ float ServoMotor::pi_velocity(){
 	}
 
 	Vi_error = Vi_error * Vi ;
-	return Vp_error +  Vi_error ;
+	float output = Vp_error + Vi_error + last_pi_velocity_output;
+	last_pi_velocity_output = output;	
+	return output ;
 	
 }
 
@@ -160,9 +162,12 @@ void ServoMotor::move(uint32_t current_time ){
 			}
 			if(sample_velocity_loop(current_time) == true){
 				float output = pi_velocity();
+				*servo_register |= dir_a  ;
 				if(output > 255){
 					 output = 255;
 				}else if(output < 0){
+					//brake 
+					*servo_register &= dir_a  ;
 					output = 0;
 				}
 				*servo_pwm = (uint8_t) output;
@@ -177,11 +182,12 @@ void ServoMotor::move(uint32_t current_time ){
 			}
 			if(sample_velocity_loop(current_time) == true){
 				float output = pi_velocity();
+				*servo_register |= dir_b  ;
 				if(output > 255){
-					//*servo_register |= dir_b  ;
 					 output = 255;	
 				}else if(output < 0){
-					//*servo_register &= ~dir_b  ;
+					//brake 
+					*servo_register &= ~dir_b  ;
 					 output = 0; 	
 				}
 				*servo_pwm = (uint8_t) output;

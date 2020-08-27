@@ -142,6 +142,13 @@ void ServoMotor::move(uint32_t current_time ){
 				done = false;
 				/* Determine the direction the robot joint should turn and 
 				   set the polarity of the motor */
+				Vi_error = 0; 
+				encoder_velocity = 0;
+				sample_time_position = current_time;
+				sample_time_velocity = current_time;
+				*servo_pwm  = 0; 
+				last_pi_velocity_output = 0; 
+				Ki_error = 0; 
 				if(new_position > encoder_position){
 					*servo_register |= dir_a  ;
 					*servo_register &= ~dir_b;
@@ -155,19 +162,19 @@ void ServoMotor::move(uint32_t current_time ){
 			}
 		break;
 		case SE_POSITIVE:
-			if(encoder_position >= (new_position-BRAKING_RANGE)){
+			if(encoder_position >= (new_position-brake_plus)){
 				set_point_position = new_position;
 				servo_state = SE_WAIT;
 				break;
 			}
 			if(sample_velocity_loop(current_time) == true){
-				float output = pi_velocity();
+				float output = pi_velocity() + offset_positive;
 				*servo_register |= dir_a  ;
 				if(output > 255){
 					 output = 255;
 				}else if(output < 0){
 					//brake 
-					*servo_register &= dir_a  ;
+					*servo_register &= ~dir_a  ;
 					output = 0;
 				}
 				*servo_pwm = (uint8_t) output;
@@ -175,13 +182,13 @@ void ServoMotor::move(uint32_t current_time ){
 		
 		break; 
 		case SE_NEGATIVE:
-			if(encoder_position <= (new_position+BRAKING_RANGE)){
+			if(encoder_position <= (new_position+brake_min)){
 				set_point_position = new_position;
 				servo_state = SE_WAIT;	
 				break;
 			}
 			if(sample_velocity_loop(current_time) == true){
-				float output = pi_velocity();
+				float output = pi_velocity() + offset_negative;
 				*servo_register |= dir_b  ;
 				if(output > 255){
 					 output = 255;	
@@ -226,6 +233,7 @@ void ServoMotor::reset(){
 	encoder_position = 0; 
 	set_point_velocity = 0;
 	servo_state = SE_WAIT;
+	Vi_error = 0;
 }
 bool ServoMotor::is_done(){
 	return done;

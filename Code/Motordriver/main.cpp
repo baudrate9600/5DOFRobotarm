@@ -41,12 +41,12 @@ shift register
 uart_io_t g_uart_io;			
 uint8_t   g_direction_register;	// 8 bit vector sent into the shift register containing the directions 
 StepperMotor g_stepper_motors[2] = {
-									StepperMotor(0,0.0857142,STEPPER0_DIR,STEPPER0_STEP),
+									StepperMotor(0,0.05142852,STEPPER0_DIR,STEPPER0_STEP),
 									StepperMotor(0,0.0143946,STEPPER1_DIR,STEPPER1_STEP) 
 									};
 ServoMotor   g_servo_motors[3]   = {
 								  ServoMotor(&SERVO0_PWM,&g_direction_register,SERVO0_DIRA,SERVO0_DIRB,1),
-								  ServoMotor(&SERVO1_PWM,&g_direction_register,SERVO1_DIRA,SERVO1_DIRB,0),
+								  ServoMotor(&SERVO1_PWM,&g_direction_register,SERVO1_DIRA,SERVO1_DIRB,1),
 								  ServoMotor(&SERVO2_PWM,&g_direction_register,SERVO2_DIRA,SERVO2_DIRB,0)
 								  };
 /* f = 1 / T * 10^-6 *100 [hz] */
@@ -123,7 +123,7 @@ void init_motors(){
 void disable_motors(){
 	DDRD &= ~(SERVO0);
 	DDRD &= ~(SERVO1); 
-	DDRB &= ~(SERVO1);
+	DDRB &= ~(SERVO2);
 	DDRD &= ~(STEPPER0_DIR);
     DDRD &= ~(STEPPER0_STEP);
 	DDRD &= ~(STEPPER1_DIR);
@@ -198,6 +198,18 @@ void process_servo_command(char * command, ServoMotor * servoMotor){
 				break;
 				case 'G':
 					servoMotor->Kd = atoi(ptr2)/1000.0;	
+				break;
+				case 'H':
+					servoMotor->brake_plus = atoi(ptr2);
+				break; 
+				case 'I': 
+					servoMotor->brake_min = atoi(ptr2);
+				break; 
+				case 'J':
+					servoMotor->offset_positive = atoi(ptr2);
+				break; 
+				case 'K':
+					servoMotor->offset_negative = atoi(ptr2);
 				break;
 			}
 		case 'r': 
@@ -297,6 +309,7 @@ int main(void)
 				}
 			break;	
 			case R_RESET: 
+				spi_clear_register();
 				disable_motors();
 				reset_motors();	
 				robot_state = R_WAIT;

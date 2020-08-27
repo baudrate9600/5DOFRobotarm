@@ -95,6 +95,7 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 		
 		STEPPER_REGISTER |= step_pin;
 		_delay_us(1);
+		STEPPER_REGISTER &= ~step_pin;
 		stepper_time = current_time;
 		switch(state){
 			/*Linearly accelerate */
@@ -112,6 +113,7 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 				break; 
 			/*Rotate at a constant velocity */
 			case S_CONSTANT:
+			//	usart_sendln(pulse_width);
 				if(step_counter >= t1){
 					state = S_DECEL;
 					pulse_width_counter =pulse_width_counter *-1; 
@@ -142,7 +144,6 @@ stepper_fsm StepperMotor::fsm(uint32_t current_time)
 		}
 	}
 	
-	STEPPER_REGISTER &= ~step_pin;
 	
 	return state;
 }

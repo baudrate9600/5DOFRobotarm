@@ -36,6 +36,8 @@ float Kp,Ki,Kd;
 int16_t start; 
 int16_t new_position  ;
 servo_fsm servo_state;
+int brake_plus, brake_min;
+int16_t offset_positive,offset_negative;
 protected:
 private:
 /* Variables which interface the avr output pins to the PID controller */
@@ -50,8 +52,6 @@ int16_t last_encoder_position ;
 uint8_t encoder_rising_edge ; 
 
 float last_pi_velocity_output;
-
-
 float Vp,Vi;
 int a,b;
 bool done;
